@@ -1,1 +1,1 @@
-from pycitizen import pycitizen
+import pycitizen.aws_utils

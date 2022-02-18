@@ -8,8 +8,7 @@ import numpy as np
 import os
 import sys
 import threading
-from collections import namedtuple
-from collections.abc import Iterable
+from collections.abc import Sequence, ByteString
 import psycopg2 as py
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -142,6 +141,22 @@ def create_statement(df, tbl_name, primary_key):
 
 
 # ---------------------------------------------------------------------------- #
+#                     Helper function for input validation                     #
+# ---------------------------------------------------------------------------- #
+
+def is_sequence(seq):
+    """
+    Returns `True` if the input is a collections.Sequence (except strings or bytestrings).
+
+    Args:
+      seq: an input sequence.
+
+    Returns:
+      `True` if the sequence is a collections.Sequence and not a string or bytestring.
+    """
+    return isinstance(seq, Sequence) and not isinstance(seq, (str, ByteString))
+
+# ---------------------------------------------------------------------------- #
 #             Function to generate multiple CREATE TABLE statements            #
 # ---------------------------------------------------------------------------- #
 
@@ -154,17 +169,17 @@ def create_statements(df_seq, tbl_names, primary_keys):
     which creates shell tables in the database with column data types specified.
 
     Args:
-        df_seq (interable): A sequence of data frame objects.
-        tbl_names (iterable): A sequence of names of tables to be created.
-        primary_keys (iterable): A sequence of primary keys.
+        df_seq (seq): A sequence of data frame objects.
+        tbl_names (seq): A sequence of names of tables to be created.
+        primary_keys (seq): A sequence of primary keys.
 
     Raises:
-        TypeError: 'df_seq', 'tbl_names', and 'primary_keys' must be interables.
+        TypeError: 'df_seq', 'tbl_names', and 'primary_keys' must be sequences.
 
     Returns:
         List of SQL commands [tuple]: A tuple of CREATE TABLE statements to be passed to create_tables().
     """
-    if (not isinstance(df_seq, Iterable)) or (not isinstance(tbl_names, Iterable)) or (not isinstance(primary_keys, Iterable)):
+    if not (is_sequence(df_seq) and is_sequence(tbl_names) and isinstance(primary_keys)):
         raise TypeError(
             "'df_seq', 'tbl_names', and 'primary_keys' must be sequence container objects")
     # Generator comprehension
@@ -178,7 +193,7 @@ def create_statements(df_seq, tbl_names, primary_keys):
 #                             AWS credentials class                            #
 # ---------------------------------------------------------------------------- #
 
-class AwsCreds:
+class AwsCreds(object):
     """
     A class for storing AWS access key and secret key.
 
@@ -215,7 +230,7 @@ class AwsCreds:
 # ---------------------------------------------------------------------------- #
 
 
-class MyRedShift:
+class MyRedShift(object):
     """
     A class for interacting with Redshift database.
 
@@ -229,6 +244,8 @@ class MyRedShift:
     Methods:
             get_params(): A method for obtaining connection parameters as a tuple that may be unpacked and passed as function arguments.
             connect(): A method for creating a database session and instantiating a connection object.
+            read_tbl(): A method for reading a table into a Pandas DataFrame.
+            read_query(): A method for reading a single query output into a Pandas DataFrame.
     """
 
     def __init__(self, db_name, host, port, user, db_password):
@@ -256,7 +273,7 @@ class MyRedShift:
 
     def connect(self):
         """
-        A method for creating a database session and instantiating a connection object. The connection object will 
+        A method for creating a database session and instantiating a connection object. The connection object will
         have access to all public methods and attributes of the psycopg2 connection class, including connection.close().
         """
         conn = py.connect(
@@ -268,6 +285,44 @@ class MyRedShift:
         )
         return conn
 
+    def read_tbl(self, tbl, chunksize):
+        """
+        A method for reading a table into a Pandas DataFrame.
+
+        Args:
+            tbl (str): Table name.
+            chunksize (int): Number of rows to load into memory in each chunk.
+        """
+        # Returns a generator 'SQLiteDatabase._query_iterator'
+        gen_obj = pd.read_sql_query(
+            sql='SELECT * FROM {};'.format(tbl),
+            con=self.connect(),
+            chunksize=chunksize
+        )
+        return pd.concat(list(gen_obj))
+
+    def read_query(self, sql, chunksize=None):
+        """
+        A method for reading a single sql query output into a Pandas DataFrame.
+
+        Args:
+            sql (str): A sql query.
+            chunksize (int): Number of rows to load into memory in each chunk.
+        """
+        if chunksize is None:
+            return pd.read_sql_query(
+                sql=sql,
+                con=self.connect()
+            )
+        else:
+            gen_obj = pd.read_sql_query(
+                sql=sql,
+                con=self.connect(),
+                chunksize=chunksize
+            )
+            return pd.concat(list(gen_obj))
+
+
 # ---------------------------------------------------------------------------- #
 #                        Helper function to get AWS keys                       #
 # ---------------------------------------------------------------------------- #
@@ -275,9 +330,9 @@ class MyRedShift:
 
 def get_creds(path):
     """
-    A helper function to retrieve and return AWS credentials in a tuple string form. Another method for getting aws credentials is through creating an `AwsCreds` objects. See `?AwsCreds` for details. 
-    To run this function, it is recommended that the user store his/her AWS credentials in a hidden directory, e.g., '~/.aws/credentials/accessKeys.csv'. The csv file should contain two columns--- 'Access key ID' 
-    and 'Secret access key'--- and a single row that records the AWS credentials. To be precise, users may store their AWS credentials anywhere, but the file type must be csv and its structure must follow the 
+    A helper function to retrieve and return AWS credentials in a tuple string form. Another method for getting aws credentials is through creating an `AwsCreds` objects. See `?AwsCreds` for details.
+    To run this function, it is recommended that the user store his/her AWS credentials in a hidden directory, e.g., '~/.aws/credentials/accessKeys.csv'. The csv file should contain two columns--- 'Access key ID'
+    and 'Secret access key'--- and a single row that records the AWS credentials. To be precise, users may store their AWS credentials anywhere, but the file type must be csv and its structure must follow the
     above recommendation--- two columns and a single row.
 
     Args:
@@ -362,15 +417,15 @@ def create_tables(commands, db_name, host, port, user, db_password):
 
 def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port, user, db_password):
     """
-    This function accepts a list of tables names and data-source paths and loads data into a table in
-    the database hosted on Amazon Redshift. For database connection parameters, you may store all parameters 
+    This function accepts a sequence of tables names and data-source paths and loads data into a table in
+    the database hosted on Amazon Redshift. For database connection parameters, you may store all parameters
     in a sequence container and unpack the sequence so that all elements are passed as different parameters.
 
     Args:
-        table_names (list): The name of the target table for the COPY command. The table must already
+        table_names (seq): The name of the target table for the COPY command. The table must already
         exist in the database. The table can be temporary or persistent. The COPY command appends the
         new input data to any existing rows in the table.
-        paths (list): The location of the source data to be loaded into the target table. A manifest file
+        paths (seq): The location of the source data to be loaded into the target table. A manifest file
         can be specified with some data sources. The most commonly used data repository is an Amazon S3 bucket.
         access_key (str): Access key.
         secret_key (str): Secret key.
@@ -381,11 +436,11 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
         db_password (str): Database password.
 
     Raises:
-        TypeError: Both 'table_names' and 'paths' must be list objects.
+        TypeError: Both 'table_names' and 'paths' must be sequences.
     """
     # Check input
-    if not isinstance(table_names, list) and isinstance(paths, list):
-        raise TypeError("Both 'table_names' and 'paths' must be list objects")
+    if not (is_sequence(table_names) and is_sequence(paths)):
+        raise TypeError("Both 'table_names' and 'paths' must be sequences")
 
     try:
         # Connection object
@@ -430,14 +485,14 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
 
 def rename_col(table_names, old_nms, new_nms, db_name, host, port, user, db_password):
     """
-    This function accepts three iterables of equal lengths, executing the ALTER TABLE RENAME COLUMN statements in the database. The arguments must be iterables in the sense that
-    `isinstance(arg, collections.abc.Iterable)` is TRUE. Each element in the three iterables must match in order for the query to be executed successfully. For database connection 
+    This function accepts three sequences of equal lengths, executing the ALTER TABLE RENAME COLUMN statements in the database. The arguments must sequences like a `list` or
+    `tuple`. Each element in the three sequences must match in order for the query to be executed successfully. For database connection
     parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters.
 
     Args:
-        table_names (iterable): An iterable containing table names.
-        old_nms (iterable): An iterable containing original column names.
-        new_nms (iterable): An iterable containing new column names.
+        table_names (seq): An sequence containing table names.
+        old_nms (seq): An sequence containing original column names.
+        new_nms (seq): An sequence containing new column names.
         db_name (str): Database name.
         host (str): Database host address.
         port (str): Connection port number.
@@ -445,14 +500,14 @@ def rename_col(table_names, old_nms, new_nms, db_name, host, port, user, db_pass
         db_password (str): Database password.
 
     Raises:
-        TypeError: The arguments must be registered as iterables.
-        ValueError: The iterables must have equal lengths.
+        TypeError: The arguments must be registered as Sequences.
+        ValueError: The sequences must have equal lengths.
     """
     # Check input
-    if not isinstance(table_names, Iterable) or not isinstance(old_nms, Iterable) or not isinstance(new_nms, Iterable):
-        raise TypeError("'args' must be iterables")
+    if not (is_sequence(table_names) and is_sequence(old_nms) and is_sequence(new_nms)):
+        raise TypeError("'args' must be sequences")
     if not len(table_names) == len(old_nms) == len(new_nms):
-        raise ValueError("'args' must be iterables of the same lengths")
+        raise ValueError("'args' must be sequences of the same lengths")
 
     try:
         # Connection object
@@ -492,13 +547,13 @@ def rename_col(table_names, old_nms, new_nms, db_name, host, port, user, db_pass
 
 def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
     """
-    This function accepts two iterables of equal lengths, executing the ALTER TABLE RENAME TO statements in the database. The arguments must be iterables in the sense that
-    `isinstance(arg, collections.abc.Iterable)` is TRUE. Each element in the two iterables must match in order for the query to be executed successfully. For database connection 
+    This function accepts two sequences of equal lengths, executing the ALTER TABLE RENAME TO statements in the database. The arguments must sequences like a `list` or
+    `tuple`. Each element in the two sequences must match in order for the query to be executed successfully. For database connection
     parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters.
 
     Args:
-        old_nms (iterable): An iterable containing original table names.
-        new_nms (iterable): An iterable containing new table names.
+        old_nms (seq): An sequence containing original table names.
+        new_nms (seq): An sequence containing new table names.
         db_name (str): Database name.
         host (str): Database host address.
         port (str): Connection port number.
@@ -506,14 +561,14 @@ def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
         db_password (str): Database password.
 
     Raises:
-        TypeError: The arguments must be registered as iterables.
-        ValueError: The iterables must have equal lengths.
+        TypeError: The arguments must be registered as Sequences.
+        ValueError: The sequences must have equal lengths.
     """
     # Check input
-    if not isinstance(old_nms, Iterable) or not isinstance(new_nms, Iterable):
-        raise TypeError("'args' must be iterables")
+    if not (is_sequence(old_nms) and is_sequence(new_nms)):
+        raise TypeError("'args' must be sequences")
     if not len(old_nms) == len(new_nms):
-        raise ValueError("'args' must be iterables of the same lengths")
+        raise ValueError("'args' must be sequences of the same lengths")
 
     try:
         # Connection object
@@ -598,7 +653,7 @@ class ProgressPercentage(object):
 
 def upload_file(file_name, bucket, access_key, secret_key, object_name=None):
     """
-    This function uploads a file to an S3 bucket. User must also provide the file path to his or her AWS credentials. 
+    This function uploads a file to an S3 bucket. User must also provide the file path to his or her AWS credentials.
     Read `?get_creds` or `?AwsCreds` for details on storing AWS credentials.
 
     Args:

@@ -33,9 +33,14 @@ def _max_len_tbl(df):
     Returns:
         Series: A pandas data frame containing max string lengths for all text columns in 'df.'
     """
+    # Exclude the explicit non-object columns first
+    # There may be so mixed type 'object' columns remaining that are really numeric columns
+    df = df.select_dtypes(include=object)
     # The implementation below requires that missing values are represented as np.NaN rather than None
-    df = df.replace(to_replace={None: np.NaN}, inplace=False)
-    max_len_frame = (pd.DataFrame(df.select_dtypes(include=object)
+    # Now the mixed type 'object' columns with pd.None or pd.NA representing missing numeric values should become numeric types
+    df_obj = df.replace(to_replace={None: np.NaN}, inplace=False)
+    # Create a frame containing max string length for each object column
+    max_len_frame = (pd.DataFrame(df_obj.select_dtypes(include=object)
                                   .replace(to_replace={np.NaN: None}, inplace=False)
                                   .apply(lambda col: col.str.len().max()))
                      .reset_index()
@@ -60,11 +65,9 @@ def _float_cols(df):
     Returns:
         Series: A list of float column names in 'df.'
     """
-    # The implementation below requires that missing values are represented as np.NaN rather than None
-    df = df.replace(to_replace={None: np.NaN}, inplace=False)
     # The list comprehension returns a boolean list, which is then used to select the numeric columns
     float_cols = (df.iloc[:, [~pd.to_numeric(df[col], errors='coerce').isna().all() for col in df.columns.tolist()]]
-                  .select_dtypes(include=float)
+                  .select_dtypes(include=[np.float16, np.float32, np.float64, np.float128])
                   .columns.tolist())
     return float_cols
 
@@ -84,8 +87,6 @@ def _datetime_cols(df):
     Returns:
         Series: A list of datetime64 column names in 'df.'
     """
-    # The implementation below requires that missing values are represented as np.NaN rather than None
-    df = df.replace(to_replace={None: np.NaN}, inplace=False)
     datetime_cols = (df.select_dtypes(include='datetime64')
                      .columns.tolist())
     return datetime_cols
@@ -107,10 +108,11 @@ def create_statement(df, tbl_name, primary_key):
     Args:
         df: DataFrame.
         tbl_name (str): Name of the table to be created.
-        primary_key (str): Primary key of the table. Note this column must not contain NULL values.
+        primary_key (str): Primary key of the table. Note this column must be a string column and must not contain NULL values.
 
     Raises:
-        TypeError: 'df' must be a dataframe object and 'tbl_name' and 'primary_key' must be string objects.
+        TypeError: The argument 'df' must be a dataframe object and 'tbl_name' and 'primary_key' must be string objects.
+        ColumnDtypeInferError: The argument 'df' contains one or more columns that cannot be inferred. Currently, only columns with dtype `int`, `float`, `datetime64` or `object` columns can be inferred.
 
     Returns:
         SQL commands [str]: A CREATE TABLE statement to be passed to create_tables().
@@ -121,7 +123,7 @@ def create_statement(df, tbl_name, primary_key):
 
     col_dtypes = (str(val) for val in set(df.dtypes.to_dict().values()))
 
-    if not all((dtype in ('datetime64[ns]', 'object', 'int8', 'int16', 'int32', 'int64', 'float16', 'float32', 'float64', 'float128') for dtype in col_dtypes)):
+    if not all((dtype in ('datetime64[ns]', 'object', 'int8', 'int16', 'int32', 'int64', 'Int64', 'float16', 'float32', 'float64', 'float128') for dtype in col_dtypes)):
         raise ColumnDtypeInferError(
             "'df' contains columns with dtypes that cannot be inferred see documentation for supported dtypes")
 
@@ -150,7 +152,7 @@ def create_statement(df, tbl_name, primary_key):
     df_commands = (df_all.join(df_varchar, how='left', sort=False))
     # Specify float columns as 'DOUBLE PRECISION'
     df_commands.iloc[(
-        col in float_col_nms for col in df.columns)] = 'DOUBLE PRECISION,'
+        col in float_col_nms for col in df.columns)] = 'REAL,'
     # Specify datetime columns as 'TIMESTAMPTZ'
     df_commands.iloc[(
         col in datetime_col_nms for col in df.columns)] = 'TIMESTAMPTZ,'
@@ -210,7 +212,8 @@ def create_statements(df_seq, tbl_names, primary_keys):
         primary_keys (seq): A sequence of primary keys.
 
     Raises:
-        TypeError: 'df_seq', 'tbl_names', and 'primary_keys' must be sequences.
+        TypeError: The arguments 'df_seq', 'tbl_names', and 'primary_keys' must be registered as Sequences.
+        ValueError: The sequences 'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths.
 
     Returns:
         List of SQL commands [tuple]: A tuple of CREATE TABLE statements to be passed to create_tables().
@@ -219,7 +222,8 @@ def create_statements(df_seq, tbl_names, primary_keys):
         raise TypeError(
             "'df_seq', 'tbl_names', and 'primary_keys' must be sequences like lists or tuples")
     if not len(df_seq) == len(tbl_names) == len(primary_keys):
-        raise ValueError("'args' must be sequences of the same lengths")
+        raise ValueError(
+            "'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths")
     # Generator comprehension
     tuple_of_commands = tuple((create_statement(df, tbl_name, primary_key)
                                for df, tbl_name, primary_key in zip(df_seq, tbl_names, primary_keys)))
@@ -415,7 +419,7 @@ def create_tables(commands, db_name, host, port, user, db_password):
         db_password (str): Database password.
 
     Raises:
-        TypeError: 'commands' must be a tuple.
+        TypeError: The argument 'commands' must be a tuple.
         TypeError: All SQL commands must be string objects wrapped by triple quotes.
     """
     # Check inputs
@@ -475,14 +479,16 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
         db_password (str): Database password.
 
     Raises:
-        TypeError: Both 'table_names' and 'paths' must be sequences.
+        TypeError: The arguments 'table_names' and 'paths' must be registered as Sequences.
+        ValueError: The sequences 'table_names' and 'paths' must have equal lengths.
     """
     # Check input
     if not (is_sequence(table_names) and is_sequence(paths)):
         raise TypeError(
-            "Both 'table_names' and 'paths' must be sequences like lists or tuples")
+            "'table_names' and 'paths' must be sequences like lists or tuples")
     if not len(table_names) == len(paths):
-        raise ValueError("'args' must be sequences of the same lengths")
+        raise ValueError(
+            "'table_names' and 'paths' must have equal lengths")
 
     try:
         # Connection object
@@ -542,15 +548,16 @@ def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_passwo
         db_password (str): Database password.
 
     Raises:
-        TypeError: The arguments must be registered as Sequences.
-        ValueError: The sequences must have equal lengths.
+        TypeError: The arguments 'tbl_names', 'old_nms', and 'new_nms' must be registered as Sequences.
+        ValueError: The sequences 'tbl_names', 'old_nms', and 'new_nms' must have equal lengths.
     """
     # Check input
     if not (is_sequence(tbl_names) and is_sequence(old_nms) and is_sequence(new_nms)):
         raise TypeError(
-            "tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples")
+            "'tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples")
     if not len(tbl_names) == len(old_nms) == len(new_nms):
-        raise ValueError("'args' must be sequences of the same lengths")
+        raise ValueError(
+            "'tbl_names', 'old_nms', and 'new_nms' must have equal lengths")
 
     try:
         # Connection object
@@ -604,15 +611,16 @@ def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
         db_password (str): Database password.
 
     Raises:
-        TypeError: The arguments must be registered as Sequences.
-        ValueError: The sequences must have equal lengths.
+        TypeError: The arguments 'old_nms' and 'new_nms' must be registered as Sequences.
+        ValueError: The sequences 'old_nms' and 'new_nms' must have equal lengths.
     """
     # Check input
     if not (is_sequence(old_nms) and is_sequence(new_nms)):
         raise TypeError(
-            "Both 'old_nms', and 'new_nms' must be sequences like lists or tuples")
+            "'old_nms' and 'new_nms' must be sequences like lists or tuples")
     if not len(old_nms) == len(new_nms):
-        raise ValueError("'args' must be sequences of the same lengths")
+        raise ValueError(
+            "'old_nms' and 'new_nms' must have equal lengths")
 
     try:
         # Connection object

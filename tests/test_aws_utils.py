@@ -7,10 +7,24 @@ import numpy as np
 
 @pytest.fixture(scope='module')
 def read_test_frame():
-    return pd.read_csv('tests/test_data_frame.csv')
+    df = pd.read_csv(
+        'tests/test_data_frame.csv',
+        parse_dates=['date', 'date_with_na'],
+        dtype={
+            'int8': np.int8,
+            'int16_missing': 'Int64',
+            'int32': np.int32,
+            'int64': np.int64,
+            'float16': np.float16,
+            'float32': np.float32,
+            'float64': np.float64
+        }
+    )
+    df['mix_numeric_none'].replace(to_replace={np.nan: None}, inplace=True)
+    return df
 
 # ---------------------------------------------------------------------------- #
-#                         Non-AWS application programs                         #
+#                     Test that specific errors are raised                     #
 # ---------------------------------------------------------------------------- #
 
 
@@ -36,6 +50,9 @@ class TestInputValidation:
         scope='function'
     )
     def test_create_statement_type_error(self, df, tbl_name, primary_key):
+        """
+        Exception raised that 'df' must be a data frame and 'tbl_name' and 'primary_key' must be string objects.
+        """
         with pytest.raises(TypeError, match="'df' must be a data frame and 'tbl_name' and 'primary_key' must be string objects"):
             au.create_statement(df, tbl_name, primary_key)
 
@@ -52,6 +69,9 @@ class TestInputValidation:
         scope='function'
     )
     def test_create_statement_col_dtype_error(self, df, tbl_name, primary_key):
+        """
+        Exception raised that 'df' contains columns with dtypes that cannot be inferred.
+        """
         with pytest.raises(ColumnDtypeInferError, match="'df' contains columns with dtypes that cannot be inferred see documentation for supported dtypes"):
             au.create_statement(df, tbl_name, primary_key)
 
@@ -89,6 +109,9 @@ class TestInputValidation:
         scope='function'
     )
     def test_create_statementS_type_error(self, df_seq, tbl_names, primary_keys):
+        """
+        Exception raised that 'df_seq', 'tbl_names', and 'primary_keys' must be sequences like lists or tuples.
+        """
         with pytest.raises(TypeError, match="'df_seq', 'tbl_names', and 'primary_keys' must be sequences like lists or tuples"):
             au.create_statements(df_seq, tbl_names, primary_keys)
 
@@ -106,7 +129,10 @@ class TestInputValidation:
         scope='function'
     )
     def test_create_statementS_len_error(self, df_seq, tbl_names, primary_keys):
-        with pytest.raises(ValueError, match="'args' must be sequences of the same lengths"):
+        """
+        Exception raised that 'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths.
+        """
+        with pytest.raises(ValueError, match="'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths"):
             au.create_statements(df_seq, tbl_names, primary_keys)
 
     # -------------------------- Tests for create_tables ------------------------- #
@@ -123,6 +149,9 @@ class TestInputValidation:
         scope='function'
     )
     def test_create_tables_type_error(self, commands):
+        """
+        Exception raised that 'commands' must be a tuple. This may be changed to allow more flexibility in the future.
+        """
         with pytest.raises(TypeError, match="'commands' must be a tuple"):
             au.create_tables(commands, db_name="name", host="host",
                              port="port", user="user", db_password="pass")
@@ -132,6 +161,9 @@ class TestInputValidation:
         scope='function'
     )
     def test_create_tables_element_error(self, commands):
+        """
+        Exception raised that all elements in 'commands' must be strings.
+        """
         with pytest.raises(TypeError, match="All CREATE TABLE statements in 'commands' must be string objects"):
             au.create_tables(commands, db_name="name", host="host",
                              port="port", user="user", db_password="pass")
@@ -151,7 +183,10 @@ class TestInputValidation:
         scope='function'
     )
     def test_copy_tables_type_error(self, tbl_names, paths):
-        with pytest.raises(TypeError, match="Both 'table_names' and 'paths' must be sequences like lists or tuples"):
+        """
+        Exception raised that 'table_names' and 'paths' must be sequences like lists or tuples.
+        """
+        with pytest.raises(TypeError, match="'table_names' and 'paths' must be sequences like lists or tuples"):
             au.copy_tables(tbl_names, paths, access_key="abcd", secret_key="efgh", db_name="name", host="host",
                            port="port", user="user", db_password="pass")
 
@@ -160,7 +195,10 @@ class TestInputValidation:
         scope='function'
     )
     def test_copy_tables_len_error(self, tbl_names, paths):
-        with pytest.raises(ValueError, match="'args' must be sequences of the same lengths"):
+        """
+        Exception raised that 'table_names' and 'paths' must have equal lengths.
+        """
+        with pytest.raises(ValueError, match="'table_names' and 'paths' must have equal lengths"):
             au.copy_tables(tbl_names, paths, access_key="abcd", secret_key="efgh", db_name="name", host="host",
                            port="port", user="user", db_password="pass")
 
@@ -185,7 +223,10 @@ class TestInputValidation:
         scope='function'
     )
     def test_rename_col_type_error(self, tbl_names, old_nms, new_nms):
-        with pytest.raises(TypeError, match="tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples"):
+        """
+        Exception raised that 'tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples.
+        """
+        with pytest.raises(TypeError, match="'tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples"):
             au.rename_col(tbl_names, old_nms, new_nms, db_name="name", host="host",
                           port="port", user="user", db_password="pass")
 
@@ -195,7 +236,10 @@ class TestInputValidation:
         scope='function'
     )
     def test_rename_col_len_error(self, tbl_names, old_nms, new_nms):
-        with pytest.raises(ValueError, match="'args' must be sequences of the same lengths"):
+        """
+        Exception raised that 'tbl_names', 'old_nms', and 'new_nms' must have equal lengths.
+        """
+        with pytest.raises(ValueError, match="'tbl_names', 'old_nms', and 'new_nms' must have equal lengths"):
             au.rename_col(tbl_names, old_nms, new_nms, db_name="name", host="host",
                           port="port", user="user", db_password="pass")
 
@@ -218,7 +262,10 @@ class TestInputValidation:
         scope='function'
     )
     def test_rename_tbl_type_error(self, old_nms, new_nms):
-        with pytest.raises(TypeError, match="Both 'old_nms', and 'new_nms' must be sequences like lists or tuples"):
+        """
+        Exception raised that 'old_nms' and 'new_nms' must be sequences like lists or tuples.
+        """
+        with pytest.raises(TypeError, match="'old_nms' and 'new_nms' must be sequences like lists or tuples"):
             au.rename_tbl(old_nms, new_nms, db_name="name", host="host",
                           port="port", user="user", db_password="pass")
 
@@ -227,6 +274,23 @@ class TestInputValidation:
         scope='function'
     )
     def test_rename_tbl_len_error(self, old_nms, new_nms):
-        with pytest.raises(ValueError, match="'args' must be sequences of the same lengths"):
+        """
+        Exception raised that 'old_nms' and 'new_nms' must have equal lengths.
+        """
+        with pytest.raises(ValueError, match="'old_nms' and 'new_nms' must have equal lengths"):
             au.rename_tbl(old_nms, new_nms, db_name="name", host="host",
                           port="port", user="user", db_password="pass")
+
+# ---------------------------------------------------------------------------- #
+#    Test that create statement functions infer column 'dtypes' accordingly    #
+# ---------------------------------------------------------------------------- #
+
+
+class TestCreateStatement:
+    """
+    Check that create_statement and create_statements generate sql command(s) with correctly inferred data type(s). Also test the return object(s) is of the expected class.
+    """
+
+    # ------------------------------- Single table ------------------------------- #
+    
+    

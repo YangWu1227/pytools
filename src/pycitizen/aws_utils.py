@@ -8,6 +8,7 @@ import numpy as np
 import os
 import sys
 import threading
+from pycitizen.exceptions import ColumnDtypeInferError
 from collections.abc import Sequence, ByteString
 import psycopg2 as py
 import boto3
@@ -21,7 +22,7 @@ from botocore.exceptions import ClientError, NoCredentialsError
 # ---------------------------------------------------------------------------- #
 
 
-def max_len_tbl(df):
+def _max_len_tbl(df):
     """
     This function takes a data frame object and finds the maximum string
     length in each text column.
@@ -49,7 +50,7 @@ def max_len_tbl(df):
 # ---------------------------------------------------------------------------- #
 
 
-def float_cols(df):
+def _float_cols(df):
     """
     This function takes a data frame object and finds the float columns.
 
@@ -61,12 +62,33 @@ def float_cols(df):
     """
     # The implementation below requires that missing values are represented as np.NaN rather than None
     df = df.replace(to_replace={None: np.NaN}, inplace=False)
-    # The list comprehension returns a boolean list, which is then used to subset the numeric columns
-    float_columns = (df.iloc[:, [~pd.to_numeric(df[col], errors='coerce').isna().all() for col in df.columns.tolist()]]
-                     .select_dtypes(include=float)
-                     .columns.tolist())
-    return float_columns
+    # The list comprehension returns a boolean list, which is then used to select the numeric columns
+    float_cols = (df.iloc[:, [~pd.to_numeric(df[col], errors='coerce').isna().all() for col in df.columns.tolist()]]
+                  .select_dtypes(include=float)
+                  .columns.tolist())
+    return float_cols
 
+
+# ---------------------------------------------------------------------------- #
+#                    Function that finds datetime variables                    #
+# ---------------------------------------------------------------------------- #
+
+
+def _datetime_cols(df):
+    """
+    This function takes a data frame object and finds the datatime64 columns.
+
+    Args:
+        df: DataFrame.
+
+    Returns:
+        Series: A list of datetime64 column names in 'df.'
+    """
+    # The implementation below requires that missing values are represented as np.NaN rather than None
+    df = df.replace(to_replace={None: np.NaN}, inplace=False)
+    datetime_cols = (df.select_dtypes(include='datetime64')
+                     .columns.tolist())
+    return datetime_cols
 
 # ---------------------------------------------------------------------------- #
 #                  Function to create a CREATE TABLE statement                 #
@@ -77,7 +99,10 @@ def create_statement(df, tbl_name, primary_key):
     """
     This function generates a single CREATE TABLE statement given a data frame and a table name. The CREATE
     TABLE statement is used to stage a shell of a table into which data will be copied either from S3 or directly
-    after cleaning.
+    from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64), `float` (16, 32, 64, 128),
+    `datetime64` or `object` can be inferred. The experimental `StringDtype` extension dtype for Pandas dataframe is
+    not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes)
+    on basic dtypes.
 
     Args:
         df: DataFrame.
@@ -94,19 +119,27 @@ def create_statement(df, tbl_name, primary_key):
         raise TypeError(
             "'df' must be a data frame and 'tbl_name' and 'primary_key' must be string objects")
 
+    col_dtypes = (str(val) for val in set(df.dtypes.to_dict().values()))
+
+    if not all((dtype in ('datetime64[ns]', 'object', 'int8', 'int16', 'int32', 'int64', 'float16', 'float32', 'float64', 'float128') for dtype in col_dtypes)):
+        raise ColumnDtypeInferError(
+            "'df' contains columns with dtypes that cannot be inferred see documentation for supported dtypes")
+
     # Create a dataframe containing all columns as rows in the order based on the order of columns in 'df'
     df_all = pd.DataFrame(
         {'col': df.columns}
     ).set_index('col')
     # Create a dataframe containing text columns in 'df' and each of their associated max string length
     # This dataframe has: 'col' (index for joining with df_all) and 'dtype' (max string length as np.int32)
-    df_varchar = max_len_tbl(df)
+    df_varchar = _max_len_tbl(df)
     # Format the 'dtype' column in 'df_varchar', e.g., 3 becomes 'VARCHAR(3),'
     df_varchar['dtype'] = df_varchar['dtype'].map(
         lambda x: 'VARCHAR(' + str(x) + ')'
     )
     # Create a list of float column names in 'df'
-    float_col_nms = float_cols(df)
+    float_col_nms = _float_cols(df)
+    # Create a list of datetime column names in 'df'
+    datetime_col_nms = _datetime_cols(df)
     # Format 'primary_key' to add 'NOT NULL,' in addition to 'VARCHAR(int)'
     df_varchar['dtype'] = np.where(
         df_varchar.index == primary_key,
@@ -116,8 +149,11 @@ def create_statement(df, tbl_name, primary_key):
     # Left join 'df_varchar' onto 'df_all' on the index 'col', preserving the left (df_all) index order
     df_commands = (df_all.join(df_varchar, how='left', sort=False))
     # Specify float columns as 'DOUBLE PRECISION'
-    df_commands.iloc[[
-        col in float_col_nms for col in df.columns]] = 'DOUBLE PRECISION,'
+    df_commands.iloc[(
+        col in float_col_nms for col in df.columns)] = 'DOUBLE PRECISION,'
+    # Specify datetime columns as 'TIMESTAMPTZ'
+    df_commands.iloc[(
+        col in datetime_col_nms for col in df.columns)] = 'TIMESTAMPTZ,'
     # Reset index
     df_commands.reset_index(inplace=True)
     # Replace all NaN's with INTEGER (those are the non-text columns)
@@ -154,7 +190,7 @@ def is_sequence(seq):
     Returns:
       `True` if the sequence is a collections.Sequence and not a string or bytestring.
     """
-    return isinstance(seq, Sequence) and not isinstance(seq, (str, ByteString))
+    return isinstance(seq, Sequence) and not isinstance(seq, (str, ByteString, range))
 
 # ---------------------------------------------------------------------------- #
 #             Function to generate multiple CREATE TABLE statements            #
@@ -179,9 +215,11 @@ def create_statements(df_seq, tbl_names, primary_keys):
     Returns:
         List of SQL commands [tuple]: A tuple of CREATE TABLE statements to be passed to create_tables().
     """
-    if not (is_sequence(df_seq) and is_sequence(tbl_names) and isinstance(primary_keys)):
+    if not (is_sequence(df_seq) and is_sequence(tbl_names) and is_sequence(primary_keys)):
         raise TypeError(
-            "'df_seq', 'tbl_names', and 'primary_keys' must be sequence container objects")
+            "'df_seq', 'tbl_names', and 'primary_keys' must be sequences like lists or tuples")
+    if not len(df_seq) == len(tbl_names) == len(primary_keys):
+        raise ValueError("'args' must be sequences of the same lengths")
     # Generator comprehension
     tuple_of_commands = tuple((create_statement(df, tbl_name, primary_key)
                                for df, tbl_name, primary_key in zip(df_seq, tbl_names, primary_keys)))
@@ -356,8 +394,9 @@ def get_creds(path):
 def create_tables(commands, db_name, host, port, user, db_password):
     """
     When passed a tuple of SQL commands, this function executes the commands and commits the
-    changes to Redshift. For database connection parameters, you may store all parameters in a
-    sequence container and unpack the sequence so that all elements are passed as different parameters.
+    changes to Redshift. For single table creation, use `(command, )` to pass a single-element
+    tuple. For database connection parameters, you may store all parameters in a sequence container 
+    and unpack the sequence so that all elements are passed as different parameters.
 
     Args:
         commands (tuple): A tuple of SQL commands. E.g.
@@ -440,7 +479,10 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
     """
     # Check input
     if not (is_sequence(table_names) and is_sequence(paths)):
-        raise TypeError("Both 'table_names' and 'paths' must be sequences")
+        raise TypeError(
+            "Both 'table_names' and 'paths' must be sequences like lists or tuples")
+    if not len(table_names) == len(paths):
+        raise ValueError("'args' must be sequences of the same lengths")
 
     try:
         # Connection object
@@ -483,14 +525,14 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
 # ---------------------------------------------------------------------------- #
 
 
-def rename_col(table_names, old_nms, new_nms, db_name, host, port, user, db_password):
+def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_password):
     """
     This function accepts three sequences of equal lengths, executing the ALTER TABLE RENAME COLUMN statements in the database. The arguments must sequences like a `list` or
     `tuple`. Each element in the three sequences must match in order for the query to be executed successfully. For database connection
     parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters.
 
     Args:
-        table_names (seq): An sequence containing table names.
+        tbl_names (seq): An sequence containing table names.
         old_nms (seq): An sequence containing original column names.
         new_nms (seq): An sequence containing new column names.
         db_name (str): Database name.
@@ -504,9 +546,10 @@ def rename_col(table_names, old_nms, new_nms, db_name, host, port, user, db_pass
         ValueError: The sequences must have equal lengths.
     """
     # Check input
-    if not (is_sequence(table_names) and is_sequence(old_nms) and is_sequence(new_nms)):
-        raise TypeError("'args' must be sequences")
-    if not len(table_names) == len(old_nms) == len(new_nms):
+    if not (is_sequence(tbl_names) and is_sequence(old_nms) and is_sequence(new_nms)):
+        raise TypeError(
+            "tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples")
+    if not len(tbl_names) == len(old_nms) == len(new_nms):
         raise ValueError("'args' must be sequences of the same lengths")
 
     try:
@@ -521,10 +564,10 @@ def rename_col(table_names, old_nms, new_nms, db_name, host, port, user, db_pass
         # Cursor object
         cur = conn.cursor()
         # Copy tables iteratively
-        for table_name, old_nm, new_nm in zip(table_names, old_nms, new_nms):
+        for tbl_name, old_nm, new_nm in zip(tbl_names, old_nms, new_nms):
             cur.execute(
                 f'''
-                ALTER TABLE {table_name}
+                ALTER TABLE {tbl_name}
                 RENAME COLUMN {old_nm} TO {new_nm}
                 '''
             )
@@ -566,7 +609,8 @@ def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
     """
     # Check input
     if not (is_sequence(old_nms) and is_sequence(new_nms)):
-        raise TypeError("'args' must be sequences")
+        raise TypeError(
+            "Both 'old_nms', and 'new_nms' must be sequences like lists or tuples")
     if not len(old_nms) == len(new_nms):
         raise ValueError("'args' must be sequences of the same lengths")
 

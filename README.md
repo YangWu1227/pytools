@@ -1,6 +1,11 @@
 # pycitizen
 
-A Python toolkit for Citizen under development.
+<!-- badges: start -->
+[![codecov](https://codecov.io/gh/YangWu1227/pycitizen/branch/master/graph/badge.svg?token=KS3DTV6WDT)](https://codecov.io/gh/YangWu1227/pycitizen)
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+<!-- badges: end -->
+
+A Python toolkit for Citizen currently under development.
 
 ## Installation
 

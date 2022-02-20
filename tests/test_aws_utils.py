@@ -363,3 +363,6 @@ class TestCreateStatement:
                                         'CREATE TABLE test3 (col VARCHAR(5), key VARCHAR(1) NOT NULL, PRIMARY KEY (key))',
                                         'CREATE TABLE test4 (col DATE, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))'
         )
+
+
+# ------------------------------- Mock database ------------------------------ #

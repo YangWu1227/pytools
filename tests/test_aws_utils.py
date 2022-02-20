@@ -9,10 +9,10 @@ import numpy as np
 def read_test_frame():
     df = pd.read_csv(
         'tests/test_data_frame.csv',
-        parse_dates=['date', 'date_with_na'],
         dtype={
             'int8': np.int8,
             'int16_missing': 'Int64',
+            'mix_numeric_none': 'Int64',
             'int32': np.int32,
             'int64': np.int64,
             'float16': np.float16,
@@ -20,7 +20,6 @@ def read_test_frame():
             'float64': np.float64
         }
     )
-    df['mix_numeric_none'].replace(to_replace={np.nan: None}, inplace=True)
     return df
 
 # ---------------------------------------------------------------------------- #
@@ -288,7 +287,7 @@ class TestInputValidation:
 
 class TestCreateStatement:
     """
-    Check that create_statement and create_statements generate sql command(s) with correctly inferred data type(s). Also test the return object(s) is of the expected class.
+    Check that create_statement and create_statements generate sql command(s) with correctly inferred data type(s). Also test the return object(s) is of the expected class(es).
     """
 
     # ------------------------------- Single table ------------------------------- #

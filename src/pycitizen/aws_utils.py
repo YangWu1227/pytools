@@ -101,7 +101,7 @@ def create_statement(df, tbl_name, primary_key):
     This function generates a single CREATE TABLE statement given a data frame and a table name. The CREATE
     TABLE statement is used to stage a shell of a table into which data will be copied either from S3 or directly
     from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64), `float` (16, 32, 64, 128),
-    `datetime64` or `object` can be inferred. The experimental `StringDtype` extension dtype for Pandas dataframe is
+    or `object` can be inferred. The experimental `StringDtype` extension dtype for Pandas dataframe is
     not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes)
     on basic dtypes.
 
@@ -140,8 +140,6 @@ def create_statement(df, tbl_name, primary_key):
     )
     # Create a list of float column names in 'df'
     float_col_nms = _float_cols(df)
-    # Create a list of datetime column names in 'df'
-    datetime_col_nms = _datetime_cols(df)
     # Format 'primary_key' to add 'NOT NULL,' in addition to 'VARCHAR(int)'
     df_varchar['dtype'] = np.where(
         df_varchar.index == primary_key,
@@ -153,9 +151,6 @@ def create_statement(df, tbl_name, primary_key):
     # Specify float columns as 'DOUBLE PRECISION'
     df_commands.iloc[(
         col in float_col_nms for col in df.columns)] = 'REAL,'
-    # Specify datetime columns as 'TIMESTAMPTZ'
-    df_commands.iloc[(
-        col in datetime_col_nms for col in df.columns)] = 'TIMESTAMPTZ,'
     # Reset index
     df_commands.reset_index(inplace=True)
     # Replace all NaN's with INTEGER (those are the non-text columns)
@@ -447,11 +442,11 @@ def create_tables(commands, db_name, host, port, user, db_password):
         cur.close()
         # Commit changes
         conn.commit()
-    except (Exception, py.DatabaseError, py.DataError, py.OperationalError) as error:
-        print(error)
-    finally:
+        # Close
         if conn is not None:
             conn.close()
+    except (Exception, py.DatabaseError, py.DataError, py.OperationalError) as error:
+        print(error)
 
 
 # ---------------------------------------------------------------------------- #
@@ -519,11 +514,11 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
         cur.close()
         # Commit changes
         conn.commit()
-    except (Exception, py.DatabaseError, py.DataError, NoCredentialsError) as error:
-        print(error)
-    finally:
+        # Close
         if conn is not None:
             conn.close()
+    except (Exception, py.DatabaseError, py.DataError, NoCredentialsError) as error:
+        print(error)
 
 
 # ---------------------------------------------------------------------------- #
@@ -582,12 +577,12 @@ def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_passwo
         cur.close()
         # Commit changes
         conn.commit()
+        # Close
+        if conn is not None:
+            conn.close()
     # Catch InvalidColumnReference or UndefinedTable with py.ProgrammingError class
     except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
         print(error)
-    finally:
-        if conn is not None:
-            conn.close()
 
 
 # ---------------------------------------------------------------------------- #
@@ -644,12 +639,12 @@ def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
         cur.close()
         # Commit changes
         conn.commit()
+        # Close
+        if conn is not None:
+            conn.close()
     # Catch UndefinedTable with py.ProgrammingError class
     except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
         print(error)
-    finally:
-        if conn is not None:
-            conn.close()
 
 
 # ------------------------ Interacting with S3 storage ----------------------- #

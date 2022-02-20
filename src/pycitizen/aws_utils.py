@@ -8,8 +8,8 @@ import numpy as np
 import os
 import sys
 import threading
-from pycitizen.exceptions import ColumnDtypeInferError
 from collections.abc import Sequence, ByteString
+from pycitizen.exceptions import ColumnDtypeInferError
 import psycopg2 as py
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -100,10 +100,10 @@ def create_statement(df, tbl_name, primary_key):
     """
     This function generates a single CREATE TABLE statement given a data frame and a table name. The CREATE
     TABLE statement is used to stage a shell of a table into which data will be copied either from S3 or directly
-    from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64), `float` (16, 32, 64, 128),
-    or `object` can be inferred. The experimental `StringDtype` extension dtype for Pandas dataframe is
-    not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes)
-    on basic dtypes.
+    from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64 bits), `Int` (nullable integer),
+    `float` (16, 32, 64, 128 bits), `datetime64` or `object` can be inferred. Note that columns with dtype `datetime64` will 
+    be mapped to the `DATE` dtype in Redshift, which is different from `TIMESTAMP`. The experimental `StringDtype` extension 
+    dtype for Pandas dataframe is not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes) on basic dtypes.
 
     Args:
         df: DataFrame.
@@ -121,11 +121,13 @@ def create_statement(df, tbl_name, primary_key):
         raise TypeError(
             "'df' must be a data frame and 'tbl_name' and 'primary_key' must be string objects")
 
-    col_dtypes = (str(val) for val in set(df.dtypes.to_dict().values()))
+    implemented_dtypes = ('datetime64[ns]', 'object', 'int8', 'int16', 'int32', 'int64', 'Int8',
+                          'Int16', 'Int32', 'Int64', 'float16', 'float32', 'float64', 'float128')
 
-    if not all((dtype in ('datetime64[ns]', 'object', 'int8', 'int16', 'int32', 'int64', 'Int64', 'float16', 'float32', 'float64', 'float128') for dtype in col_dtypes)):
-        raise ColumnDtypeInferError(
-            "'df' contains columns with dtypes that cannot be inferred see documentation for supported dtypes")
+    if not all((dtype in implemented_dtypes for dtype in (str(val) for val in set(df.dtypes.to_dict().values())))):
+        err_col_nms = [df.select_dtypes(include=col).columns.tolist()[0]
+                       for col in (str(val) for val in set(df.dtypes.to_dict().values())) if col not in implemented_dtypes]
+        raise ColumnDtypeInferError(err_col_nms)
 
     # Create a dataframe containing all columns as rows in the order based on the order of columns in 'df'
     df_all = pd.DataFrame(
@@ -140,6 +142,8 @@ def create_statement(df, tbl_name, primary_key):
     )
     # Create a list of float column names in 'df'
     float_col_nms = _float_cols(df)
+    # Create a list of datetime column names in 'df'
+    date_col_nms = _datetime_cols(df)
     # Format 'primary_key' to add 'NOT NULL,' in addition to 'VARCHAR(int)'
     df_varchar['dtype'] = np.where(
         df_varchar.index == primary_key,
@@ -151,6 +155,9 @@ def create_statement(df, tbl_name, primary_key):
     # Specify float columns as 'DOUBLE PRECISION'
     df_commands.iloc[(
         col in float_col_nms for col in df.columns)] = 'REAL,'
+    # Specify date columns as 'DATE', if there is any
+    if len(date_col_nms) != 0:
+        df_commands.iloc[(col in date_col_nms for col in df.columns)] = 'DATE,'
     # Reset index
     df_commands.reset_index(inplace=True)
     # Replace all NaN's with INTEGER (those are the non-text columns)

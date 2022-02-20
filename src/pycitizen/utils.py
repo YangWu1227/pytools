@@ -1,7 +1,7 @@
 import psycopg2 as py
 import pycitizen.aws_utils as au
+from pycitizen.exceptions import ColumnDtypeInferError
 import pandas as pd
-from random import sample
 import numpy as np
 import os
 
@@ -29,3 +29,20 @@ if __name__ == '__main__':
         os.environ.get('Aws_access'),
         os.environ.get('Aws_secret')
     ).get_params()
+
+    # ---------------------------------------------------------------------------- #
+    #                                   Test data                                  #
+    # ---------------------------------------------------------------------------- #
+
+    df = pd.read_csv(
+        os.getcwd().replace('src/pycitizen', '') + 'tests/test_data_frame.csv',
+        parse_dates=['date', 'date_with_na'],
+        dtype={
+            'int8': np.int8,
+            'int16_missing': 'Int64',
+            'int32': np.int32,
+            'int64': np.int64,
+            'float16': np.float16,
+            'float32': np.float32,
+            'float64': np.float64
+        })

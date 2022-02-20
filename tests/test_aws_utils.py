@@ -4,15 +4,17 @@ import pytest
 import pandas as pd
 import numpy as np
 
+# --------------------------------- Test data -------------------------------- #
+
 
 @pytest.fixture(scope='module')
 def read_test_frame():
-    df = pd.read_csv(
+    return pd.read_csv(
         'tests/test_data_frame.csv',
+        parse_dates=['date', 'date_with_na'],
         dtype={
             'int8': np.int8,
             'int16_missing': 'Int64',
-            'mix_numeric_none': 'Int64',
             'int32': np.int32,
             'int64': np.int64,
             'float16': np.float16,
@@ -20,7 +22,17 @@ def read_test_frame():
             'float64': np.float64
         }
     )
-    return df
+
+# -- Test data containing columns with dtypes that have not been implemented - #
+
+
+@pytest.fixture(scope='class')
+def df():
+    return pd.DataFrame({'col': pd.Series([1, 2, 3, pd.NA], dtype="Int64"),
+                         'key': ('a', 'b', 'c', 'd'),
+                         'err1': (True, False, True, False),
+                         'err2': pd.Series(["a", "b", "c"], dtype="string"),
+                         'err3': pd.Series(["a", "b", "c", "a"], dtype="category")})
 
 # ---------------------------------------------------------------------------- #
 #                     Test that specific errors are raised                     #
@@ -55,24 +67,12 @@ class TestInputValidation:
         with pytest.raises(TypeError, match="'df' must be a data frame and 'tbl_name' and 'primary_key' must be string objects"):
             au.create_statement(df, tbl_name, primary_key)
 
-    @pytest.mark.parametrize(
-        "df, tbl_name, primary_key",
-        [
-            # Case 1 (df contains 'bool')
-            (pd.DataFrame({'a': (False, True), 'b': ('a', 'b')}),
-             'nm', 'pkey'),
-            # Case 2 (df contains 'categorical')
-            (pd.DataFrame(pd.Series(["a", "b", "c", "a"], dtype="category")),
-             'nm', 'pkey')
-        ],
-        scope='function'
-    )
-    def test_create_statement_col_dtype_error(self, df, tbl_name, primary_key):
+    def test_create_statement_col_dtype_error(self, df):
         """
         Exception raised that 'df' contains columns with dtypes that cannot be inferred.
         """
-        with pytest.raises(ColumnDtypeInferError, match="'df' contains columns with dtypes that cannot be inferred see documentation for supported dtypes"):
-            au.create_statement(df, tbl_name, primary_key)
+        with pytest.raises(ColumnDtypeInferError, match="The dtypes of the following columns cannot be inferred"):
+            au.create_statement(df, 'test', 'key')
 
     # ------------------------ Tests for create_statements ----------------------- #
 
@@ -284,12 +284,82 @@ class TestInputValidation:
 #    Test that create statement functions infer column 'dtypes' accordingly    #
 # ---------------------------------------------------------------------------- #
 
+# ----------------------- Test data for two edge cases ----------------------- #
+
+
+@pytest.fixture(scope='class')
+def df1():
+    return pd.DataFrame(
+        {'col': (1, 2, 3, pd.NA),
+         'key': ('a', 'b', 'c', 'd')}
+    )
+
+
+@pytest.fixture(scope='class')
+def df2():
+    return pd.DataFrame(
+        {'col': ('1', '2.342', '3', 'str'),
+         'key': ('a', 'b', 'c', 'd')}
+    )
+
+
+@pytest.fixture(scope='class')
+def df3():
+    return pd.DataFrame(
+        {'col': pd.to_datetime(['2018-10-26', '2018-10-26', '2022-10-22', '2022-12-27']),
+         'key': ('a', 'b', 'c', 'd')}
+    )
+
 
 class TestCreateStatement:
     """
     Check that create_statement and create_statements generate sql command(s) with correctly inferred data type(s). Also test the return object(s) is of the expected class(es).
     """
 
-    # ------------------------------- Single table ------------------------------- #
-    
-    
+    # ----------------------------- Single statement ----------------------------- #
+
+    def test_create_statement_class(self, read_test_frame):
+        """
+        Check that the single create statement function returns a single string object.
+        """
+        assert isinstance(au.create_statement(
+            read_test_frame, 'test', 'key'), str)
+
+    def test_create_statement_output(self, read_test_frame):
+        """
+        Check that the single create statement function returns expected output given fixture dtypes.
+        """
+        assert au.create_statement(read_test_frame, 'test', 'key') == 'CREATE TABLE test (date DATE, date_with_na DATE, key VARCHAR(6) NOT NULL, varchar_long VARCHAR(36), varchar_missing VARCHAR(1), int8 INTEGER, int16_missing INTEGER, int32 INTEGER, int64 INTEGER, float16 REAL, float32 REAL, float64_missing REAL, mix_str_int_missing VARCHAR(2), PRIMARY KEY (key))'
+
+    def test_create_statement_edge(self, df1, df2):
+        """
+        Check some edge cases--- int column with pd.NA and string column with numbers.
+        """
+        assert au.create_statement(
+            df1, 'test1', 'key') == 'CREATE TABLE test1 (col INTEGER, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))'
+        assert au.create_statement(
+            df2, 'test2', 'key') == 'CREATE TABLE test2 (col VARCHAR(5), key VARCHAR(1) NOT NULL, PRIMARY KEY (key))'
+
+    # ---------------------------- Multiple statements --------------------------- #
+
+    def test_create_statementS_class(self, read_test_frame, df1, df2):
+        """
+        Check that the vectorized create statement function returns a tuple of strings.
+        """
+        commands = au.create_statements((read_test_frame, df1, df2),
+                                        ('test1', 'test2', 'test3'), ('key', 'key', 'key'))
+        elements = [isinstance(command, str) for command in commands]
+        assert isinstance(commands, tuple)
+        assert all(elements) == True
+
+    def test_create_statementS_output(self, read_test_frame, df1, df2, df3):
+        """
+        Check that the vectorized create statement function returns expected output given a set of fixure inputs.
+        """
+        assert au.create_statements((read_test_frame, df1, df2, df3),
+                                    ('test1', 'test2', 'test3', 'test4'), ('key', 'key', 'key', 'key')) == (
+                                        'CREATE TABLE test1 (date DATE, date_with_na DATE, key VARCHAR(6) NOT NULL, varchar_long VARCHAR(36), varchar_missing VARCHAR(1), int8 INTEGER, int16_missing INTEGER, int32 INTEGER, int64 INTEGER, float16 REAL, float32 REAL, float64_missing REAL, mix_str_int_missing VARCHAR(2), PRIMARY KEY (key))',
+                                        'CREATE TABLE test2 (col INTEGER, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))',
+                                        'CREATE TABLE test3 (col VARCHAR(5), key VARCHAR(1) NOT NULL, PRIMARY KEY (key))',
+                                        'CREATE TABLE test4 (col DATE, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))'
+        )

@@ -22,6 +22,7 @@ pytest-lazy-fixture = ">=0.6.3"
 pytest-cov = ">=3.0.0"
 pytest-mock-resources = "2.2.0"
 docker = ">=5.0.3"
+sqlparse = ">=0.4.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

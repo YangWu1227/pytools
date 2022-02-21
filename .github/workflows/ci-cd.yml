@@ -11,6 +11,14 @@ jobs:
     # Run on the latest version of an Ubuntu Linux runner hosted by GitHub
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:9.6.10-alpine
+        env:
+          POSTGRES_DB: dev
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+
     # Job steps
     steps:
     - name: Set up Python 3.9

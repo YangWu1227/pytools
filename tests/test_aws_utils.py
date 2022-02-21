@@ -1,5 +1,6 @@
 import pycitizen.aws_utils as au
 from pycitizen.exceptions import ColumnDtypeInferError
+from pytest_postgresql import factories
 import pytest
 import pandas as pd
 import numpy as np
@@ -365,4 +366,6 @@ class TestCreateStatement:
         )
 
 
-# ------------------------------- Mock database ------------------------------ #
+# ---------------------------------------------------------------------------- #
+#                      Test classes defined in the module                      #
+# ---------------------------------------------------------------------------- #

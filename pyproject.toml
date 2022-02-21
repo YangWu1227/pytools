@@ -21,6 +21,7 @@ pytest = ">=7.0.1"
 pytest-lazy-fixture = ">=0.6.3"
 pytest-cov = ">=3.0.0"
 pytest-mock-resources = "2.2.0"
+docker = ">=5.0.3"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

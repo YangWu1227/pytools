@@ -329,7 +329,7 @@ class MyRedShift(object):
         )
         return conn
 
-    def read_tbl(self, tbl, chunksize):
+    def read_tbl(self, tbl, chunksize=None):
         """
         A method for reading a table into a Pandas DataFrame.
 
@@ -337,12 +337,18 @@ class MyRedShift(object):
             tbl (str): Table name.
             chunksize (int): Number of rows to load into memory in each chunk.
         """
-        # Returns a generator 'SQLiteDatabase._query_iterator'
-        gen_obj = pd.read_sql_query(
-            sql='SELECT * FROM {};'.format(tbl),
-            con=self.connect(),
-            chunksize=chunksize
-        )
+        if chunksize is None:
+            return pd.read_sql_query(
+                sql='SELECT * FROM {};'.format(tbl),
+                con=self.connect()
+            )
+        else:
+            # Returns a generator 'SQLiteDatabase._query_iterator'
+            gen_obj = pd.read_sql_query(
+                sql='SELECT * FROM {};'.format(tbl),
+                con=self.connect(),
+                chunksize=chunksize
+            )
         return pd.concat(list(gen_obj))
 
     def read_query(self, sql, chunksize=None):

@@ -1,6 +1,7 @@
 import pycitizen.aws_utils as au
 from pycitizen.exceptions import ColumnDtypeInferError
-from pytest_postgresql import factories
+from psycopg2.extensions import connection
+from pytest_mock_resources import create_redshift_fixture, Statements
 import pytest
 import pandas as pd
 import numpy as np
@@ -369,3 +370,109 @@ class TestCreateStatement:
 # ---------------------------------------------------------------------------- #
 #                      Test classes defined in the module                      #
 # ---------------------------------------------------------------------------- #
+
+# --------------------------- Fixure redshift table -------------------------- #
+
+# Three columns and ten rows
+statements = Statements(
+    """
+    CREATE TABLE test(
+      id INTEGER PRIMARY KEY,
+      str VARCHAR (1),
+      num INTEGER
+    );
+    """,
+    """
+    INSERT INTO test (id, str, num) VALUES (1, 'A', 3), (2, 'B', 4), (3, 'D', 3), (4, 'Z', 4), (5, 'A', 3), (6, 'C', 4), (7, 'F', 3), (8, 'B', 4), (9, 'D', 3), (10, 'G', 4);
+    """
+)
+
+# ---------------------- Tests for the MyRedshift class ---------------------- #
+
+redshift = create_redshift_fixture(
+    statements,
+    scope='class'
+)
+
+
+def test_MyRedShift(redshift):
+    """
+    Tests for MyRedshift class constructor, attributes, and methods.
+    """
+    # Obtain credentials
+    credentials = redshift.pmr_credentials.as_psycopg2_kwargs()
+    params = (
+        credentials['dbname'],
+        credentials['host'],
+        credentials['port'],
+        credentials['user'],
+        credentials['password']
+    )
+    # Instantiate class
+    db = au.MyRedShift(*params)
+
+    # Test that class constructor returns expected object
+    assert isinstance(db, au.MyRedShift)
+
+    # Check attributes
+    assert db.db_name == params[0]
+    assert db.host == params[1]
+    assert db.port == params[2]
+    assert db.user == params[3]
+    assert db.db_password == params[4]
+
+    # Test get_params() method
+    assert isinstance(db.get_params(), tuple)
+    assert db.get_params() == params
+
+    # Test connect() method
+    assert isinstance(db.connect(), connection)
+
+    # Test read_tbl() method
+    # Other branch chunksize!=None currently cannot be tested due to pandas internals incompatible with pytest_mock_resources
+    pd.testing.assert_frame_equal(
+        db.read_tbl(tbl='test', chunksize=None),
+        pd.DataFrame({
+            'id': tuple(range(1, 11)),
+            'str': ('A', 'B', 'D', 'Z', 'A', 'C', 'F', 'B', 'D', 'G'),
+            'num': (3, 4) * 5
+        })
+    )
+
+    # Test read_query() method
+    pd.testing.assert_frame_equal(
+        db.read_query(sql="SELECT * FROM test;", chunksize=None),
+        pd.DataFrame({
+            'id': tuple(range(1, 11)),
+            'str': ('A', 'B', 'D', 'Z', 'A', 'C', 'F', 'B', 'D', 'G'),
+            'num': (3, 4) * 5
+        })
+    )
+
+# ----------------------- Tests for the AwsCreds class ----------------------- #
+
+
+@pytest.fixture
+def aws_creds():
+    return ('access', 'secret')
+
+
+class TestAwsCreds:
+    """
+    Tests for the AwsCreds class constructor, attributes, and methods.
+    """
+
+    def test_AwsCreds_class_constructor(self, aws_creds):
+        """
+        Tests for the AwsCreds class constructor.
+        """
+        # Instantiate
+        creds = au.AwsCreds(*aws_creds)
+
+        # Attributes
+        assert creds.access_key == aws_creds[0]
+        assert creds.secret_key == aws_creds[1]
+
+        # Method
+        assert isinstance(creds.get_params(), tuple)
+        assert creds.get_params() == aws_creds

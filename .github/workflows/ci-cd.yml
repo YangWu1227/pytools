@@ -34,7 +34,7 @@ jobs:
 
     - name: Install postgres dependencies
       run: |
-        python -m pip install "pytest-mock-resources[postgres, redshift]"
+        python -m pip install "pytest-mock-resources[postgres, redshift]" sqlparse docker
 
     - name: Install package
       run: poetry install

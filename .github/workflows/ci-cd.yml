@@ -7,17 +7,27 @@ on:
     branches: [main, master]
 
 jobs:
+  # Label of the container job is 'ci'
   ci:
     # Run on the latest version of an Ubuntu Linux runner hosted by GitHub
     runs-on: ubuntu-latest
 
+    # Service containers to run with 'ci'
     services:
       postgres:
+        # Docker Hub image
         image: postgres:9.6.10-alpine
+        # Set environment variables
         env:
           POSTGRES_DB: dev
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
+        # Set health checks to wait until postgres has started by redirecting output
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     # Job steps
     steps:

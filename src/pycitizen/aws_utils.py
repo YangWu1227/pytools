@@ -244,9 +244,6 @@ class AwsCreds(object):
     Attributes:
             access_key (str): Access key.
             secret_key (str): Secret key.
-
-    Methods:
-            get_params(): A method for obtaining credentials as a tuple that may be unpacked and passed as function arguments.
     """
 
     def __init__(self, access_key, secret_key):
@@ -284,12 +281,6 @@ class MyRedShift(object):
             port (str): Connection port number.
             user (str): User name used to authenticate.
             db_password (str): Database password.
-
-    Methods:
-            get_params(): A method for obtaining connection parameters as a tuple that may be unpacked and passed as function arguments.
-            connect(): A method for creating a database session and instantiating a connection object.
-            read_tbl(): A method for reading a table into a Pandas DataFrame.
-            read_query(): A method for reading a single query output into a Pandas DataFrame.
     """
 
     def __init__(self, db_name, host, port, user, db_password):

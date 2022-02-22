@@ -2,6 +2,10 @@ import pycitizen.aws_utils as au
 from pycitizen.exceptions import ColumnDtypeInferError
 from psycopg2.extensions import connection
 from pytest_mock_resources import create_redshift_fixture, Statements
+from io import StringIO
+import os
+import boto3
+from moto import mock_s3
 import pytest
 import pandas as pd
 import numpy as np
@@ -371,7 +375,7 @@ class TestCreateStatement:
 #                      Test classes defined in the module                      #
 # ---------------------------------------------------------------------------- #
 
-# --------------------------- Fixure redshift table -------------------------- #
+# ------------------------- Redshift database fixture ------------------------ #
 
 # Three columns and ten rows
 statements = Statements(
@@ -391,7 +395,7 @@ statements = Statements(
 
 redshift = create_redshift_fixture(
     statements,
-    scope='class'
+    scope='module'
 )
 
 
@@ -476,3 +480,138 @@ class TestAwsCreds:
         # Method
         assert isinstance(creds.get_params(), tuple)
         assert creds.get_params() == aws_creds
+
+
+# ---------------------------------------------------------------------------- #
+#                   Tests for database interaction functions                   #
+# ---------------------------------------------------------------------------- #
+
+# --------------------------- Create table commands -------------------------- #
+
+@pytest.fixture(scope='function')
+def create_commands():
+    """
+    Fixture for create_tables() function.
+    """
+    return ('CREATE TABLE test1 (col INTEGER, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))', 'CREATE TABLE test2 (col2 VARCHAR(5), key2 VARCHAR(1) NOT NULL, PRIMARY KEY (key2))')
+
+# ----------------- Tests for database interaction functions ----------------- #
+
+
+def test_database_interaction(redshift, create_commands):
+    """
+    Tests for create_tables(), rename_tbl(), and rename_col(). The copy_tables() function
+    is currently tested only manually outside of this automated testing framework.
+    """
+    # Database connection parameters
+    credentials = redshift.pmr_credentials.as_psycopg2_kwargs()
+    params = (
+        credentials['dbname'],
+        credentials['host'],
+        credentials['port'],
+        credentials['user'],
+        credentials['password']
+    )
+
+    # ----------------------------- Test create table ---------------------------- #
+
+    au.create_tables(
+        create_commands,
+        *params
+    )
+    # Instantiate a class and retrieve created empty tables
+    db = au.MyRedShift(*params)
+    df1 = db.read_tbl('test1', None)
+    df2 = db.read_tbl('test2', None)
+    # Check if columns match those listed in the create statements
+    assert df1.columns.tolist() == ['col', 'key']
+    assert df2.columns.tolist() == ['col2', 'key2']
+
+    # ----------------------------- Test rename table ---------------------------- #
+
+    # Change table names
+    au.rename_tbl(('test1', 'test2'), ('new1', 'new2'), *params)
+    # Verify by reading the tables using their new names and checking if they contain original columns
+    assert db.read_tbl('new1', None).columns.tolist() == ['col', 'key']
+    assert db.read_tbl('new2', None).columns.tolist() == ['col2', 'key2']
+
+    # ---------------------------- Test rename column ---------------------------- #
+
+    # Change columns names
+    au.rename_col(
+        ('new1', 'new2'),
+        ('col', 'col2'),
+        ('new_col', 'new_col2'),
+        *params
+    )
+    # Verify if column names have been changed
+    df1_new = db.read_tbl('new1', None)
+    df2_new = db.read_tbl('new2', None)
+    assert df1_new.columns.tolist() == ['new_col', 'key']
+    assert df2_new.columns.tolist() == ['new_col2', 'key2']
+
+
+# ---------------------------------------------------------------------------- #
+#                       Tests for S3 interaction function                      #
+# ---------------------------------------------------------------------------- #
+
+# ------------------------------ Fixtures for s3 ----------------------------- #
+
+@pytest.fixture(scope='function')
+def aws_credentials():
+    """
+    Mocked AWS credentials for moto.
+    """
+    os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
+    os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
+    os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
+
+
+@pytest.fixture(scope='function')
+def s3(aws_credentials):
+    """
+    Mocked S3 client object.
+    """
+    with mock_s3():
+        yield boto3.client('s3', region_name='us-east-1')
+
+
+def test_s3_interaction(redshift, s3, read_test_frame):
+    """
+    Tests for upload_file() function. 
+    """
+    # Create bucket
+    s3.create_bucket(Bucket='test_bucket')
+    # Upload file to s3
+    au.upload_file(
+        'tests/test_data_frame.csv',
+        'test_bucket',
+        'testing',
+        'testing'
+    )
+    # Get file from s3 bucket
+    bucket_obj = s3.get_object(Bucket='test_bucket', Key='test_data_frame.csv')
+    result = bucket_obj['Body'].read()
+    # Credit to https://gist.github.com/ghandic/dbde264a0d666a415bbf1bdcc3645aec
+    df = pd.read_csv(
+        StringIO(result.decode('utf-8')),
+        parse_dates=['date', 'date_with_na'],
+        dtype={
+            'int8': np.int8,
+            'int16_missing': 'Int64',
+            'int32': np.int32,
+            'int64': np.int64,
+            'float16': np.float16,
+            'float32': np.float32,
+            'float64': np.float64
+        })
+
+    # Test that the columns are consistent pre-and-post upload
+    assert df.columns.tolist() == read_test_frame.columns.tolist()
+    # Test that the shapes are consistent pre-and-post upload
+    assert df.shape == read_test_frame.shape
+    # Test that the data are consistent
+    pd.testing.assert_frame_equal(
+        df,
+        read_test_frame
+    )

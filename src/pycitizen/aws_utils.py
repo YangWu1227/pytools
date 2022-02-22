@@ -669,8 +669,9 @@ def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
 
 class ProgressPercentage(object):
     """
-    A progress tracker that prints a simple progress percentage to the user. For more
-    information, please refer to the `Boto3` documentations.
+    A progress tracker that prints a simple progress percentage to the user. Credit to
+    the AWS SKD for implementing this class. For more information, please refer to the `Boto3` 
+    [documentations](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-uploading-files.html).
     """
 
     # Class constructor
@@ -714,7 +715,9 @@ class ProgressPercentage(object):
 def upload_file(file_name, bucket, access_key, secret_key, object_name=None):
     """
     This function uploads a file to an S3 bucket. User must also provide the file path to his or her AWS credentials.
-    Read `?get_creds` or `?AwsCreds` for details on storing AWS credentials.
+    Read `?get_creds` or `?AwsCreds` for details on storing AWS credentials. Credit to the AWS SDK for the basic structure
+    of the function. For more information, please refer to the `Boto3` 
+    [documentations](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-uploading-files.html). 
 
     Args:
         file_name (str): The path and file name of the object to upload.

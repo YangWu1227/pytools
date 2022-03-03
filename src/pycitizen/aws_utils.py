@@ -20,11 +20,11 @@ from collections.abc import Sequence, ByteString
 from pycitizen.exceptions import ColumnDtypeInferError
 
 
-# --------------------------- SQL commands creation -------------------------- #
+# ---------------------------------------------------------------------------- #
+#                             SQL commands creation                            #
+# ---------------------------------------------------------------------------- #
 
-# ---------------------------------------------------------------------------- #
-#         Function that finds the max string length in each text column        #
-# ---------------------------------------------------------------------------- #
+# ------- Function that finds the max string length in each text column ------ #
 
 
 def _max_len_tbl(df):
@@ -57,10 +57,7 @@ def _max_len_tbl(df):
                      .set_index('col'))
     return max_len_frame
 
-
-# ---------------------------------------------------------------------------- #
-#                      Function that finds float variables                     #
-# ---------------------------------------------------------------------------- #
+# -------------------- Function that finds float variables ------------------- #
 
 
 def _float_cols(df):
@@ -82,10 +79,7 @@ def _float_cols(df):
                   .columns.tolist())
     return float_cols
 
-
-# ---------------------------------------------------------------------------- #
-#                    Function that finds datetime variables                    #
-# ---------------------------------------------------------------------------- #
+# ------------------ Function that finds datetime variables ------------------ #
 
 
 def _datetime_cols(df):
@@ -105,9 +99,7 @@ def _datetime_cols(df):
                      .columns.tolist())
     return datetime_cols
 
-# ---------------------------------------------------------------------------- #
-#                  Function to create a CREATE TABLE statement                 #
-# ---------------------------------------------------------------------------- #
+# ---------------- Function to create a CREATE TABLE statement --------------- #
 
 
 def create_statement(df, tbl_name, primary_key):
@@ -117,7 +109,8 @@ def create_statement(df, tbl_name, primary_key):
     from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64 bits), `Int` (nullable integer),
     `float` (16, 32, 64, 128 bits), `datetime64` or `object` can be inferred. Note that columns with dtype `datetime64` will 
     be mapped to the `DATE` dtype in Redshift, which is different from `TIMESTAMP`. The experimental `StringDtype` extension 
-    dtype for Pandas dataframes is not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes) on basic dtypes.
+    dtype for Pandas dataframes is not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes) 
+    on basic dtypes.
 
     Parameters
     ----------
@@ -206,10 +199,8 @@ def create_statement(df, tbl_name, primary_key):
 
     return final_commands
 
+# ------------------- Helper function for input validation ------------------- #
 
-# ---------------------------------------------------------------------------- #
-#                     Helper function for input validation                     #
-# ---------------------------------------------------------------------------- #
 
 def is_sequence(seq):
     """
@@ -227,9 +218,7 @@ def is_sequence(seq):
     """
     return isinstance(seq, Sequence) and not isinstance(seq, (str, ByteString, range))
 
-# ---------------------------------------------------------------------------- #
-#             Function to generate multiple CREATE TABLE statements            #
-# ---------------------------------------------------------------------------- #
+# ----------- Function to generate multiple CREATE TABLE statements ---------- #
 
 
 def create_statements(df_seq, tbl_names, primary_keys):
@@ -273,8 +262,10 @@ def create_statements(df_seq, tbl_names, primary_keys):
 
 
 # ---------------------------------------------------------------------------- #
-#                             AWS credentials class                            #
+#                                AWS Credentials                               #
 # ---------------------------------------------------------------------------- #
+
+# --------------------------- AWS credentials class -------------------------- #
 
 class AwsCreds(object):
     """
@@ -313,12 +304,38 @@ class AwsCreds(object):
         """
         return self.access_key, self.secret_key
 
+# ---------------------- Helper function to get AWS keys --------------------- #
 
-# -------------------- Interacting with Redshift database -------------------- #
+
+def get_creds(path):
+    """
+    A helper function to retrieve and return AWS credentials in a tuple string form. Another method for getting aws credentials is through creating an `AwsCreds` objects. See `?AwsCreds` for details.
+    To run this function, it is recommended that the user store his/her AWS credentials in a hidden directory, e.g., '~/.aws/credentials/accessKeys.csv'. The csv file should contain two columns--- 'Access key ID'
+    and 'Secret access key'--- and a single row that records the AWS credentials. To be precise, users may store their AWS credentials anywhere, but the file type must be csv and its structure must follow the
+    above recommendation--- two columns and a single row.
+
+    Parameters
+    ----------
+    path : str
+        File path to credentials.
+
+    Returns
+    -------
+    tuple
+        A tuple of AWS credentials of the form `(access_key, secret_key)`.
+    """
+    creds = pd.read_csv(path)
+    secret_key = creds['Secret access key'].iloc[0]
+    access_key = creds['Access key ID'].iloc[0]
+
+    return access_key, secret_key
+
 
 # ---------------------------------------------------------------------------- #
-#                                Redshift class                                #
+#                      Interacting with Redshift database                      #
 # ---------------------------------------------------------------------------- #
+
+# ------------------------------ Redshift class ------------------------------ #
 
 
 class MyRedShift(object):
@@ -447,39 +464,7 @@ class MyRedShift(object):
             )
             return pd.concat(list(gen_obj))
 
-
-# ---------------------------------------------------------------------------- #
-#                        Helper function to get AWS keys                       #
-# ---------------------------------------------------------------------------- #
-
-
-def get_creds(path):
-    """
-    A helper function to retrieve and return AWS credentials in a tuple string form. Another method for getting aws credentials is through creating an `AwsCreds` objects. See `?AwsCreds` for details.
-    To run this function, it is recommended that the user store his/her AWS credentials in a hidden directory, e.g., '~/.aws/credentials/accessKeys.csv'. The csv file should contain two columns--- 'Access key ID'
-    and 'Secret access key'--- and a single row that records the AWS credentials. To be precise, users may store their AWS credentials anywhere, but the file type must be csv and its structure must follow the
-    above recommendation--- two columns and a single row.
-
-    Parameters
-    ----------
-    path : str
-        File path to credentials.
-
-    Returns
-    -------
-    tuple
-        A tuple of AWS credentials of the form `(access_key, secret_key)`.
-    """
-    creds = pd.read_csv(path)
-    secret_key = creds['Secret access key'].iloc[0]
-    access_key = creds['Access key ID'].iloc[0]
-
-    return access_key, secret_key
-
-
-# ---------------------------------------------------------------------------- #
-#                     Function to create tables in RedShift                    #
-# ---------------------------------------------------------------------------- #
+# ------------------- Function to create tables in RedShift ------------------ #
 
 
 def create_tables(commands, db_name, host, port, user, db_password):
@@ -542,10 +527,8 @@ def create_tables(commands, db_name, host, port, user, db_password):
     except (Exception, py.DatabaseError, py.DataError, py.OperationalError) as error:
         print(error)
 
+# ------------ Function to copy tables from S3 bucket to database ------------ #
 
-# ---------------------------------------------------------------------------- #
-#              Function to copy tables from S3 bucket to database              #
-# ---------------------------------------------------------------------------- #
 
 def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port, user, db_password):
     """
@@ -628,10 +611,7 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
     except (Exception, py.DatabaseError, py.DataError, NoCredentialsError) as error:
         print(error)
 
-
-# ---------------------------------------------------------------------------- #
-#               Function to rename table columns in the database               #
-# ---------------------------------------------------------------------------- #
+# ------------- Function to rename table columns in the database ------------- #
 
 
 def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_password):

@@ -2,17 +2,22 @@
 #                           Load packages and modules                          #
 # ---------------------------------------------------------------------------- #
 
-
 import pandas as pd
 import numpy as np
+import psycopg2 as py
+import boto3
+from botocore.exceptions import ClientError, NoCredentialsError
+
+# ----------------------------- Standard library ----------------------------- #
+
 import os
 import sys
 import threading
 from collections.abc import Sequence, ByteString
+
+# ------------------------------- Intra-package ------------------------------ #
+
 from pycitizen.exceptions import ColumnDtypeInferError
-import psycopg2 as py
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
 
 
 # --------------------------- SQL commands creation -------------------------- #
@@ -27,11 +32,14 @@ def _max_len_tbl(df):
     This function takes a data frame object and finds the maximum string
     length in each text column.
 
-    Args:
-        df: DataFrame.
+    Parameters
+    ----------
+    df : DataFrame
 
-    Returns:
-        Series: A pandas data frame containing max string lengths for all text columns in 'df.'
+    Returns
+    -------
+    DataFrame
+        A pandas data frame containing max string lengths for all text columns in 'df.'
     """
     # Exclude the explicit non-object columns first
     # There may be so mixed type 'object' columns remaining that are really numeric columns
@@ -59,11 +67,14 @@ def _float_cols(df):
     """
     This function takes a data frame object and finds the float columns.
 
-    Args:
-        df: DataFrame.
+    Parameters
+    ----------
+    df : DataFrame
 
-    Returns:
-        Series: A list of float column names in 'df.'
+    Returns
+    -------
+    list of str
+        A list of float column names in 'df.'
     """
     # The list comprehension returns a boolean list, which is then used to select the numeric columns
     float_cols = (df.iloc[:, [~pd.to_numeric(df[col], errors='coerce').isna().all() for col in df.columns.tolist()]]
@@ -81,11 +92,14 @@ def _datetime_cols(df):
     """
     This function takes a data frame object and finds the datatime64 columns.
 
-    Args:
-        df: DataFrame.
+    Parameters
+    ----------
+    df : DataFrame
 
-    Returns:
-        Series: A list of datetime64 column names in 'df.'
+    Returns
+    -------
+    list of str
+        A list of datetime64 column names in 'df.'
     """
     datetime_cols = (df.select_dtypes(include='datetime64')
                      .columns.tolist())
@@ -103,28 +117,41 @@ def create_statement(df, tbl_name, primary_key):
     from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64 bits), `Int` (nullable integer),
     `float` (16, 32, 64, 128 bits), `datetime64` or `object` can be inferred. Note that columns with dtype `datetime64` will 
     be mapped to the `DATE` dtype in Redshift, which is different from `TIMESTAMP`. The experimental `StringDtype` extension 
-    dtype for Pandas dataframe is not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes) on basic dtypes.
+    dtype for Pandas dataframes is not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes) on basic dtypes.
 
-    Args:
-        df: DataFrame.
-        tbl_name (str): Name of the table to be created.
-        primary_key (str): Primary key of the table. Note this column must be a string column and must not contain NULL values.
+    Parameters
+    ----------
+    df : DataFrame
+    tbl_name : str
+        Name of the table to be created.
+    primary_key : str
+        Primary key of the table. Note this column must be a string column and must not contain NULL values.
 
-    Raises:
-        TypeError: The argument 'df' must be a dataframe object and 'tbl_name' and 'primary_key' must be string objects.
-        ColumnDtypeInferError: The argument 'df' contains one or more columns that cannot be inferred. Currently, only columns with dtype `int`, `float`, `datetime64` or `object` columns can be inferred.
+    Returns
+    -------
+    str
+        A Redshift CREATE TABLE statement to be passed to create_tables().
 
-    Returns:
-        SQL commands [str]: A CREATE TABLE statement to be passed to create_tables().
+    Raises
+    ------
+    TypeError
+        The argument 'df' must be a dataframe object and 'tbl_name' and 'primary_key' must be string objects.
+    ColumnDtypeInferError
+        The argument 'df' contains one or more columns that cannot be inferred. Currently, only columns with dtype `int`, `float`, `datetime64` or `object` columns can be inferred.
     """
     if (not isinstance(df, pd.DataFrame)) or (not isinstance(tbl_name, str)) or (not isinstance(primary_key, str)):
         raise TypeError(
             "'df' must be a data frame and 'tbl_name' and 'primary_key' must be string objects")
 
+    # Check column dtypes
     implemented_dtypes = ('datetime64[ns]', 'object', 'int8', 'int16', 'int32', 'int64', 'Int8',
                           'Int16', 'Int32', 'Int64', 'float16', 'float32', 'float64', 'float128')
 
-    if not all((dtype in implemented_dtypes for dtype in (str(val) for val in set(df.dtypes.to_dict().values())))):
+    if not all(
+        (dtype in implemented_dtypes for dtype in (str(val)
+         for val in set(df.dtypes.to_dict().values())))
+    ):
+        # Get names of columns that cannot be inferred
         err_col_nms = [df.select_dtypes(include=col).columns.tolist()[0]
                        for col in (str(val) for val in set(df.dtypes.to_dict().values())) if col not in implemented_dtypes]
         raise ColumnDtypeInferError(err_col_nms)
@@ -186,13 +213,17 @@ def create_statement(df, tbl_name, primary_key):
 
 def is_sequence(seq):
     """
-    Returns `True` if the input is a collections.Sequence (except strings or bytestrings).
+    This helper returns `True` if the input is a `collections.abc.Sequence` (except strings or bytestrings).
 
-    Args:
-      seq: an input sequence.
+    Parameters
+    ----------
+    seq : Sequence of objects
+        An input sequence to be tested.
 
-    Returns:
-      `True` if the sequence is a collections.Sequence and not a string or bytestring.
+    Returns
+    -------
+    bool
+        `True` if the sequence is a `collections.abc.Sequence` and not a string or bytestring.
     """
     return isinstance(seq, Sequence) and not isinstance(seq, (str, ByteString, range))
 
@@ -208,17 +239,25 @@ def create_statements(df_seq, tbl_names, primary_keys):
     CREATE TABLE statements. The output of this function can then be passed to `create_tables()`,
     which creates shell tables in the database with column data types specified.
 
-    Args:
-        df_seq (seq): A sequence of data frame objects.
-        tbl_names (seq): A sequence of names of tables to be created.
-        primary_keys (seq): A sequence of primary keys.
+    Parameters
+    ----------
+    df_seq : Sequence of DataFrame
+    tbl_names : Sequence of str
+        A sequence of names of tables to be created.
+    primary_keys : Sequence of str
+        A sequence of primary keys.
 
-    Raises:
-        TypeError: The arguments 'df_seq', 'tbl_names', and 'primary_keys' must be registered as Sequences.
-        ValueError: The sequences 'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths.
+    Returns
+    -------
+    tuple of str
+        A tuple of Redshift CREATE TABLE statements to be passed to `create_tables()`.
 
-    Returns:
-        List of SQL commands [tuple]: A tuple of CREATE TABLE statements to be passed to create_tables().
+    Raises
+    ------
+    TypeError
+        The arguments 'df_seq', 'tbl_names', and 'primary_keys' must be registered as Sequences.
+    ValueError
+        The sequences 'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths.
     """
     if not (is_sequence(df_seq) and is_sequence(tbl_names) and is_sequence(primary_keys)):
         raise TypeError(
@@ -226,7 +265,7 @@ def create_statements(df_seq, tbl_names, primary_keys):
     if not len(df_seq) == len(tbl_names) == len(primary_keys):
         raise ValueError(
             "'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths")
-    # Generator comprehension
+    # Generator expression
     tuple_of_commands = tuple((create_statement(df, tbl_name, primary_key)
                                for df, tbl_name, primary_key in zip(df_seq, tbl_names, primary_keys)))
 
@@ -241,18 +280,24 @@ class AwsCreds(object):
     """
     A class for storing AWS access key and secret key.
 
-    Attributes:
-            access_key (str): Access key.
-            secret_key (str): Secret key.
+    Attributes
+    ----------
+    access_key : str
+        AWS access key.
+    secret_key : str
+        AWS secret key.
     """
 
     def __init__(self, access_key, secret_key):
         """
-        A parameterized class constructor.
+        A parameterized class constructor
 
-        Args:
-            access_key (str): Access key.
-            secret_key (str): Secret key.
+        Parameters
+        ----------
+        access_key : str
+            AWS access key.
+        secret_key : str
+            AWS secret key.
         """
         self.access_key = access_key
         self.secret_key = secret_key
@@ -260,6 +305,11 @@ class AwsCreds(object):
     def get_params(self):
         """
         A method for obtaining credentials as a tuple that may be unpacked and passed as function arguments.
+
+        Returns
+        -------
+        tuple of str
+            A tuple of AWS credentials.
         """
         return self.access_key, self.secret_key
 
@@ -287,12 +337,18 @@ class MyRedShift(object):
         """
         A parameterized class constructor
 
-        Args:
-            db_name (str): Database name.
-            host (str): Database host address.
-            port (str): Connection port number.
-            user (str): User name used to authenticate.
-            db_password (str): Database password.
+        Parameters
+        ----------
+        db_name : str
+            Database name.
+        host : str
+            Database host address.
+        port : str
+            Connection port number.
+        user : str
+            User name used to authenticate.
+        db_password : str
+            Database password.
         """
         self.db_name = db_name
         self.host = host
@@ -303,13 +359,23 @@ class MyRedShift(object):
     def get_params(self):
         """
         A method for obtaining connection parameters as a tuple that may be unpacked and passed as function arguments.
+
+        Returns
+        -------
+        tuple of str
+            A tuple of connection parameters.
         """
         return self.db_name, self.host, self.port, self.user, self.db_password
 
     def connect(self):
         """
         A method for creating a database session and instantiating a connection object. The connection object will
-        have access to all public methods and attributes of the psycopg2 connection class, including connection.close().
+        have access to all public methods and attributes of the `psycopg2` connection class, including `connection.close()`.
+
+        Returns
+        -------
+        A psycopg2 connection class instance
+            It handles the connection to a PostgreSQL database instance.
         """
         conn = py.connect(
             dbname=self.db_name,
@@ -322,11 +388,20 @@ class MyRedShift(object):
 
     def read_tbl(self, tbl, chunksize=None):
         """
-        A method for reading a table into a Pandas DataFrame.
+        A method for reading a table into a Pandas DataFrame. Warning: Reading large tables
+        all at once may lead to memory issues.
 
-        Args:
-            tbl (str): Table name.
-            chunksize (int): Number of rows to load into memory in each chunk.
+        Parameters
+        ----------
+        tbl : str
+            Table name.
+        chunksize : int, optional
+            Number of rows to load into memory in each chunk, by default None.
+
+        Returns
+        -------
+        DataFrame
+            A DataFrame corresponding to a table in the database.
         """
         if chunksize is None:
             return pd.read_sql_query(
@@ -344,11 +419,20 @@ class MyRedShift(object):
 
     def read_query(self, sql, chunksize=None):
         """
-        A method for reading a single sql query output into a Pandas DataFrame.
+        A method for reading a single sql query output into a Pandas DataFrame. Warning: Reading large results
+        all at once may lead to memory issues.
 
-        Args:
-            sql (str): A sql query.
-            chunksize (int): Number of rows to load into memory in each chunk.
+        Parameters
+        ----------
+        sql : str
+            A sql query.
+        chunksize : int, optional
+            Number of rows to load into memory in each chunk, by default None.
+
+        Returns
+        -------
+        DataFrame
+            A DataFrame corresponding to the result set of the query string.
         """
         if chunksize is None:
             return pd.read_sql_query(
@@ -376,11 +460,15 @@ def get_creds(path):
     and 'Secret access key'--- and a single row that records the AWS credentials. To be precise, users may store their AWS credentials anywhere, but the file type must be csv and its structure must follow the
     above recommendation--- two columns and a single row.
 
-    Args:
-        path (str): File path to credentials.
+    Parameters
+    ----------
+    path : str
+        File path to credentials.
 
-    Returns:
-        tuple: (access_key, secret_key)
+    Returns
+    -------
+    tuple
+        A tuple of AWS credentials of the form `(access_key, secret_key)`.
     """
     creds = pd.read_csv(path)
     secret_key = creds['Secret access key'].iloc[0]
@@ -399,27 +487,29 @@ def create_tables(commands, db_name, host, port, user, db_password):
     When passed a tuple of SQL commands, this function executes the commands and commits the
     changes to Redshift. For single table creation, use `(command, )` to pass a single-element
     tuple. For database connection parameters, you may store all parameters in a sequence container 
-    and unpack the sequence so that all elements are passed as different parameters.
+    and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing connection parameters.
 
-    Args:
-        commands (tuple): A tuple of SQL commands. E.g.
+    Parameters
+    ----------
+    commands : tuple of str
+        A tuple of SQL commands.
+    db_name : str
+        Database name.
+    host : str
+        Database host address.
+    port : str
+        Connection port number.
+    user : str
+        User name used to authenticate.
+    db_password : str
+        Database password.
 
-            "CREATE TABLE ma_wick_11_02_20 (
-                lalvoterid VARCHAR(14) NOT NULL,
-                method_gen_2020 VARCHAR(29),
-                bm2_support_gen_2020 INTEGER,
-                bm2_pro_exposure_gen_2020 INTEGER,
-                PRIMARY KEY (lalvoterid)
-                )"
-        db_name (str): Database name.
-        host (str): Database host address.
-        port (str): Connection port number.
-        user (str): User name used to authenticate.
-        db_password (str): Database password.
-
-    Raises:
-        TypeError: The argument 'commands' must be a tuple.
-        TypeError: All SQL commands must be string objects wrapped by triple quotes.
+    Raises
+    ------
+    TypeError
+        The argument 'commands' must be a tuple.
+    TypeError
+        All SQL commands must be string objects.
     """
     # Check inputs
     if not isinstance(commands, tuple):
@@ -459,27 +549,41 @@ def create_tables(commands, db_name, host, port, user, db_password):
 
 def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port, user, db_password):
     """
-    This function accepts a sequence of tables names and data-source paths and loads data into a table in
-    the database hosted on Amazon Redshift. For database connection parameters, you may store all parameters
-    in a sequence container and unpack the sequence so that all elements are passed as different parameters.
+    This function accepts a sequence of table names and a sequence of data-source paths, and it loads data into a table in
+    the database hosted on Amazon Redshift. Currently, the only implemented data-source is AWS S3. For database connection parameters, 
+    you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters.
+    See `?MyRedShift` for storing connection parameters.
 
-    Args:
-        table_names (seq): The name of the target table for the COPY command. The table must already
+    Parameters
+    ----------
+    table_names : Sequence of str
+        The name of the target table for the COPY command. The table must already
         exist in the database. The table can be temporary or persistent. The COPY command appends the
         new input data to any existing rows in the table.
-        paths (seq): The location of the source data to be loaded into the target table. A manifest file
+    paths : Sequence of str
+        The location of the source data to be loaded into the target table. A manifest file
         can be specified with some data sources. The most commonly used data repository is an Amazon S3 bucket.
-        access_key (str): Access key.
-        secret_key (str): Secret key.
-        db_name (str): Database name.
-        host (str): Database host address.
-        port (str): Connection port number.
-        user (str): User name used to authenticate.
-        db_password (str): Database password.
+    access_key : str
+        AWS access key.
+    secret_key : str
+        AWS secret key.
+    db_name : str
+        Database name.
+    host : str
+        Database host address.
+    port : str
+        Connection port number.
+    user : str
+        User name used to authenticate.
+    db_password : str
+        Database password.
 
-    Raises:
-        TypeError: The arguments 'table_names' and 'paths' must be registered as Sequences.
-        ValueError: The sequences 'table_names' and 'paths' must have equal lengths.
+    Raises
+    ------
+    TypeError
+        The arguments 'table_names' and 'paths' must be registered as Sequences.
+    ValueError
+        The sequences 'table_names' and 'paths' must have equal lengths.
     """
     # Check input
     if not (is_sequence(table_names) and is_sequence(paths)):
@@ -532,23 +636,36 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
 
 def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_password):
     """
-    This function accepts three sequences of equal lengths, executing the ALTER TABLE RENAME COLUMN statements in the database. The arguments must sequences like a `list` or
+    This function accepts three sequences of equal lengths, executing the `ALTER TABLE RENAME COLUMN` statements in the database. The arguments must sequences like a `list` or
     `tuple`. Each element in the three sequences must match in order for the query to be executed successfully. For database connection
-    parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters.
+    parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing
+    connection parameters. 
 
-    Args:
-        tbl_names (seq): An sequence containing table names.
-        old_nms (seq): An sequence containing original column names.
-        new_nms (seq): An sequence containing new column names.
-        db_name (str): Database name.
-        host (str): Database host address.
-        port (str): Connection port number.
-        user (str): User name used to authenticate.
-        db_password (str): Database password.
+    Parameters
+    ----------
+    tbl_names : Sequence of str
+        A sequence containing table names.
+    old_nms : Sequence of str
+        A sequence containing original column names.
+    new_nms : Sequence of str
+        A sequence containing new column names.
+    db_name : str
+        Database name.
+    host : str
+        Database host address.
+    port : str
+        Connection port number.
+    user : str
+        User name used to authenticate.
+    db_password : str
+        Database password.
 
-    Raises:
-        TypeError: The arguments 'tbl_names', 'old_nms', and 'new_nms' must be registered as Sequences.
-        ValueError: The sequences 'tbl_names', 'old_nms', and 'new_nms' must have equal lengths.
+    Raises
+    ------
+    TypeError
+        The arguments 'tbl_names', 'old_nms', and 'new_nms' must be registered as Sequences.
+    ValueError
+        The sequences 'tbl_names', 'old_nms', and 'new_nms' must have equal lengths.
     """
     # Check input
     if not (is_sequence(tbl_names) and is_sequence(old_nms) and is_sequence(new_nms)):
@@ -588,30 +705,39 @@ def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_passwo
     except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
         print(error)
 
-
-# ---------------------------------------------------------------------------- #
-#                   Function to rename tables in the database                  #
-# ---------------------------------------------------------------------------- #
+ # ----------------- Function to rename tables in the database ---------------- #
 
 
 def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
     """
-    This function accepts two sequences of equal lengths, executing the ALTER TABLE RENAME TO statements in the database. The arguments must sequences like a `list` or
+    This function accepts two sequences of equal lengths, executing the `ALTER TABLE RENAME TO` statements in the database. The arguments must be sequences like a `list` or
     `tuple`. Each element in the two sequences must match in order for the query to be executed successfully. For database connection
-    parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters.
+    parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing
+    connection parameters. 
 
-    Args:
-        old_nms (seq): An sequence containing original table names.
-        new_nms (seq): An sequence containing new table names.
-        db_name (str): Database name.
-        host (str): Database host address.
-        port (str): Connection port number.
-        user (str): User name used to authenticate.
-        db_password (str): Database password.
+    Parameters
+    ----------
+    old_nms : Sequence of str
+        A sequence containing original table names.
+    new_nms : Sequence of str
+        A sequence containing new table names.
+    db_name : str
+        Database name.
+    host : str
+        Database host address.
+    port : str
+        Connection port number.
+    user : str
+        User name used to authenticate.
+    db_password : str
+        Database password.
 
-    Raises:
-        TypeError: The arguments 'old_nms' and 'new_nms' must be registered as Sequences.
-        ValueError: The sequences 'old_nms' and 'new_nms' must have equal lengths.
+    Raises
+    ------
+    TypeError
+        The arguments 'old_nms' and 'new_nms' must be registered as Sequences.
+    ValueError
+        The sequences 'old_nms' and 'new_nms' must have equal lengths.
     """
     # Check input
     if not (is_sequence(old_nms) and is_sequence(new_nms)):
@@ -651,11 +777,11 @@ def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
         print(error)
 
 
-# ------------------------ Interacting with S3 storage ----------------------- #
+# ---------------------------------------------------------------------------- #
+#                          Interacting with S3 storage                         #
+# ---------------------------------------------------------------------------- #
 
-# ---------------------------------------------------------------------------- #
-#                Class ProcessPercentage for progress monitoring               #
-# ---------------------------------------------------------------------------- #
+# -------------- Class ProcessPercentage for progress monitoring ------------- #
 
 
 class ProgressPercentage(object):
@@ -670,8 +796,10 @@ class ProgressPercentage(object):
         """
         A parameterized class constructor.
 
-        Args:
-            filename (str): The path and file name of the object.
+        Parameters
+        ----------
+        filename : str
+            The path and file name of the object.
         """
         self._filename = filename
         self._size = float(os.path.getsize(filename))
@@ -698,24 +826,28 @@ class ProgressPercentage(object):
             sys.stdout.flush()
 
 
-# ---------------------------------------------------------------------------- #
-#                     Function to upload file to s3 bucket                     #
-# ---------------------------------------------------------------------------- #
+# ------------------- Function to upload file to s3 bucket ------------------- #
 
 
 def upload_file(file_name, bucket, access_key, secret_key, object_name=None):
     """
     This function uploads a file to an S3 bucket. User must also provide the file path to his or her AWS credentials.
-    Read `?get_creds` or `?AwsCreds` for details on storing AWS credentials. Credit to the AWS SDK for the basic structure
+    See `?get_creds` or `?AwsCreds` for details on storing AWS credentials. Credit to the AWS SDK for the basic structure
     of the function. For more information, please refer to the `Boto3` 
     [documentations](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-uploading-files.html). 
 
-    Args:
-        file_name (str): The path and file name of the object to upload.
-        bucket (str): The name of the bucket.
-        access_key (str): Access key.
-        secret_key (str): Secret key.
-        object_name (str, optional): Name for the S3 object that will be created by uploading this file. Defaults to `None`, which uses the filename.
+    Parameters
+    ----------
+    file_name : str
+        The path and file name of the object to upload.
+    bucket : str
+        The name of the bucket.
+    access_key : str
+        AWS access key.
+    secret_key : str
+        AWS secret key.
+    object_name : str, optional
+        Name for the S3 object that will be created by uploading this file. Defaults to None, which uses the filename, by default None.
     """
     # If S3 object_name was not specified, use file_name
     if object_name is None:

@@ -76,7 +76,7 @@ def check_col_nms(df):
 def clean_col_nms(df, inplace=False):
     """
     This helper function replaces any invalid character, e.g. special characters and white spaces, in a column name with 
-    an underscore and prepends a column name with an underscore if it starts with a digit. Note this function does not 
+    an underscore and removes leading characters until a character from a-z or A-Z is matched. Note this function does not 
     replace python keywords or reserved words if they exist as column names. Use the `rename()` method of pandas DataFrame or
     the datatable rename `{"A": "col_A"}` syntax to clean the column names if `check_col_nms()` reveals such invalid columns names. 
 
@@ -109,12 +109,13 @@ def clean_col_nms(df, inplace=False):
 
     original_col_nms = df.columns.tolist()
     # \W matches any character that is not a 'word character' (alphanumeric & underscore). Equivalent to [^A-Za-z0-9_]
-    # Alternation | acts like a boolean OR, matching the expression before or after it
-    # ^ matches the beginning of a string
-    # (? is positive lookahead, which matches a group after the main expression without including it in the result
-    # Then, ^(?=\d) matches the beginning of a string that is followed by a digit (essentially strings that start with a digit)
-    new_col_nms = [sub('\W|^(?=\d)', '_', col.lower())
-                   for col in original_col_nms]
+    new_col_nms = (sub('\W', '_', col.lower())
+                   for col in original_col_nms)
+    # Remove leading characters until a letter
+    # [^ ] is negated set, matching any character that is not in this set
+    # + is a quantifier, matching the preceding element one or more times
+    new_col_nms = [sub('^[^a-zA-Z]+', '', col) for col in new_col_nms]
+    # Assign new columns
     df.columns = new_col_nms
 
     # Return copy

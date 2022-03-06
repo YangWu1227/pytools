@@ -1,14 +1,24 @@
-import pycitizen.aws_utils as au
-from pycitizen.exceptions import ColumnDtypeInferError
+# ---------------------------------------------------------------------------- #
+#                           Load packages and modules                          #
+# ---------------------------------------------------------------------------- #
+
 from psycopg2.extensions import connection
 from pytest_mock_resources import create_redshift_fixture, Statements
-from io import StringIO
-import os
 import boto3
 from moto import mock_s3
 import pytest
 import pandas as pd
 import numpy as np
+
+# ----------------------------- Standard library ----------------------------- #
+
+from io import StringIO
+import os
+
+# ------------------------------- Intra-package ------------------------------ #
+
+import pycitizen.aws_utils as au
+from pycitizen.exceptions import ColumnDtypeInferError
 
 # --------------------------------- Test data -------------------------------- #
 

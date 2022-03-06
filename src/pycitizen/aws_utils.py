@@ -13,11 +13,11 @@ from botocore.exceptions import ClientError, NoCredentialsError
 import os
 import sys
 import threading
-from collections.abc import Sequence, ByteString
 
 # ------------------------------- Intra-package ------------------------------ #
 
 from pycitizen.exceptions import ColumnDtypeInferError
+from pycitizen.predicates import is_sequence
 
 
 # ---------------------------------------------------------------------------- #
@@ -198,25 +198,6 @@ def create_statement(df, tbl_name, primary_key):
     final_commands = f'CREATE TABLE {tbl_name} ({commands})'
 
     return final_commands
-
-# ------------------- Helper function for input validation ------------------- #
-
-
-def is_sequence(seq):
-    """
-    This helper returns `True` if the input is a `collections.abc.Sequence` (except strings or bytestrings).
-
-    Parameters
-    ----------
-    seq : Sequence of objects
-        An input sequence to be tested.
-
-    Returns
-    -------
-    bool
-        `True` if the sequence is a `collections.abc.Sequence` and not a string or bytestring.
-    """
-    return isinstance(seq, Sequence) and not isinstance(seq, (str, ByteString, range))
 
 # ----------- Function to generate multiple CREATE TABLE statements ---------- #
 

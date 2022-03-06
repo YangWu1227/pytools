@@ -3,8 +3,8 @@
 # ---------------------------------------------------------------------------- #
 
 import pandas as pd
-import datatable as dt
 import numpy as np
+import datatable as dt
 from category_encoders import OrdinalEncoder as ce_OrdinalEncoder
 from category_encoders import OneHotEncoder as ce_OneHotEncoder
 
@@ -20,7 +20,8 @@ from collections import namedtuple
 
 # ------------------------------- Intra-package ------------------------------ #
 
-from pycitizen.exceptions import ColumnNameKeyWordError, ColumnNameStartWithDigitError, InvalidIdentifierError
+from pycitizen.exceptions import ColumnDtypeInferError, ColumnNameKeyWordError, ColumnNameStartWithDigitError, InvalidIdentifierError, InvalidColumnDtypeError
+from pycitizen.predicates import is_sequence
 
 # ---------------------------------------------------------------------------- #
 #                               Cleaning helpers                               #
@@ -90,19 +91,7 @@ def clean_col_nms(df, inplace=False):
     -------
     DataFrame
         A DataFrame with transformed column names or None if inplace=True.
-
-    Raises
-    ------
-    TypeError
-        The argument 'df' must be a DataFrame.
-    TypeError
-        The argument 'inplace' must be a boolean.
     """
-    if not isinstance(df, pd.DataFrame):
-        raise TypeError("'df' must be a DataFrame")
-    if not isinstance(inplace, bool):
-        raise TypeError("'inplace' must be a single boolean")
-
     # Create a copy if inplace=False
     if (not inplace):
         df = df.copy()
@@ -165,3 +154,75 @@ def freq_tbl(df, dropna=False, **kwargs):
     freq_tbl = freq._make(gen_of_freq)
 
     return freq_tbl
+
+# ----------------------- Function for case conversion ----------------------- #
+
+
+def case_convert(df, cols=None, to='lower', inplace=False):
+    """
+    This helper function converts the cases in the columns of a DataFrame; the aim is to address case inconsistencies 
+    in string columns. Use this function to ensure values in a DataFrame are consistent with regards to case, which helps 
+    reduce the chance of committing further errors later on in the cleaning process.
+
+    Parameters
+    ----------
+    df : DataFrame
+    cols : Sequence of str, optional
+        A sequence of column names , by default None, which converts all columns that can be inferred as having 'string' dtypes.
+    to : str, optional
+        The direction or type of case conversion, by default 'lower'.
+    inplace : bool, optional
+        Whether to return a new DataFrame, by default False.
+
+    Returns
+    -------
+    DataFrame
+        A DataFrame with transformed columns or None if inplace=True.
+
+    Raises
+    ------
+    TypeError
+        The argument 'cols' must be registered as a Sequence.
+    InvalidColumnDtypeError
+        User supplied columns contain non-string columns.
+    ValueError
+        Direction or type of case conversion must either be 'lower', 'upper', 'title', or 'capitalize'.
+    """
+    # If user supplies cols, check that input is a sequence
+    if not is_sequence(cols) and cols is not None:
+        raise TypeError("'col' must be a sequence like a list or tuple")
+
+    # Create a copy if inplace=False
+    if (not inplace):
+        df = df.copy()
+
+    # If user does not specify columns, default to using all columns that are inferred as 'string'
+    if cols == None:
+        bool_is_str = [pd.api.types.infer_dtype(
+            value=df[col], skipna=True) == 'string' for col in df.columns.tolist()]
+        cols = list(compress(df.columns.tolist(), bool_is_str))
+    else:
+        bool_is_str = [pd.api.types.infer_dtype(
+            value=df[col], skipna=True) == 'string' for col in cols]
+        # If user supplies columns, check input column data types
+        if not all(bool_is_str):
+            raise InvalidColumnDtypeError(col_nms=list(
+                compress(cols, [not element for element in bool_is_str])), dtype='string')
+
+    if (to == 'upper'):
+        df[cols] = df[cols].apply(lambda x: x.str.upper())
+    elif (to == 'lower'):
+        df[cols] = df[cols].apply(lambda x: x.str.lower())
+    elif (to == 'title'):
+        df[cols] = df[cols].apply(lambda x: x.str.title())
+    elif (to == 'capitalize'):
+        df[cols] = df[cols].apply(lambda x: x.str.capitalize())
+    else:
+        raise ValueError(
+            "'to' must either by 'lower', 'upper', 'title', or 'capitalize'")
+
+    # Return copy
+    if (not inplace):
+        return df
+    else:
+        return None

@@ -75,10 +75,10 @@ def check_col_nms(df):
 
 def clean_col_nms(df, inplace=False):
     """
-    This helper function replaces any invalid character, e.g. special characters and white spaces, in a column name with 
-    an underscore and removes leading characters until a character from a-z or A-Z is matched. Note this function does not 
-    replace python keywords or reserved words if they exist as column names. Use the `rename()` method of pandas DataFrame or
-    the datatable rename `{"A": "col_A"}` syntax to clean the column names if `check_col_nms()` reveals such invalid columns names. 
+    This helper function removes any invalid character, e.g. special characters and white spaces, in a column name and removes 
+    leading characters until a character from a-z or A-Z is matched. Note this function does not replace python keywords or reserved 
+    words if they exist as column names. Use the `rename()` method of pandas DataFrame or the datatable rename `{"A": "col_A"}` syntax 
+    to clean the column names if `check_col_nms()` reveals such invalid columns names. 
 
     Parameters
     ----------
@@ -109,7 +109,7 @@ def clean_col_nms(df, inplace=False):
 
     original_col_nms = df.columns.tolist()
     # \W matches any character that is not a 'word character' (alphanumeric & underscore). Equivalent to [^A-Za-z0-9_]
-    new_col_nms = (sub('\W', '_', col.lower())
+    new_col_nms = (sub('\W', '', col.lower())
                    for col in original_col_nms)
     # Remove leading characters until a letter
     # [^ ] is negated set, matching any character that is not in this set

@@ -61,3 +61,18 @@ class InvalidIdentifierError(Exception):
 
     def __str__(self):
         return f'Columns {self.col_nms} are invalid identifiers'
+
+# ----------------- Columns do not have correct dtypes error ----------------- #
+
+
+class InvalidColumnDtypeError(Exception):
+    """
+    Exception raised when user supplied columns do not have the dtypes that the function expects.
+    """
+
+    def __init__(self, col_nms, dtype):
+        self.col_nms = col_nms
+        self.dtype = dtype
+
+    def __str__(self):
+        return f"Columns {self.col_nms} are invalid as dtype '{self.dtype}' is expected"

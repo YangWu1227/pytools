@@ -15,7 +15,7 @@ from collections import namedtuple
 # ------------------------------- Intra-package ------------------------------ #
 
 import pycitizen.data_cleaning as dc
-from pycitizen.exceptions import ColumnNameKeyWordError, ColumnNameStartWithDigitError, InvalidIdentifierError
+from pycitizen.exceptions import ColumnNameKeyWordError, ColumnNameStartWithDigitError, InvalidIdentifierError, InvalidColumnDtypeError
 
 
 # ---------------------------------------------------------------------------- #
@@ -27,9 +27,10 @@ def test_data():
     return pd.DataFrame({
         'likert_encode': ('A', 'A', 'B', 'C', 'D', 'D', 'C', pd.NA, 'C', 'E'),
         'str_encode': ('bachelor', 'highschool', pd.NA, 'grad', 'grad', pd.NA, 'highschool', 'college', 'college', 'bachelor'),
-        'onhot_encode': ('A',) * 5 + ('B',) * 5,
+        'onehot_encode': ('A',) * 5 + ('B',) * 5,
         'case_convert': ('Upper',) * 5 + ('lower',) * 3 + (pd.NA, pd.NA),
-        'misspell': ('republican',) * 4 + ('repulican',) + ('democrat',) * 3 + ('democract',) * 2
+        'misspell': ('republican',) * 4 + ('repulican',) + ('democrat',) * 3 + ('democract',) * 2,
+        'invalid_case_convert': tuple(range(0, 10))
     })
 
 # ---------------------------------------------------------------------------- #
@@ -113,6 +114,8 @@ class TestFreqTable:
         """
         Check that freq_tbl() raises exceptions when function fails (non **kwargs).
         """
+
+        # Unique error messages due to polymorphism
         with pytest.raises(AttributeError, match="object has no attribute 'select_dtypes'"):
             dc.freq_tbl(pd.Series(('A', 'B')), False)
         with pytest.raises(TypeError, match='boolean value of NA is ambiguous'):
@@ -153,8 +156,90 @@ class TestFreqTable:
         # Tuple
         assert isinstance(dc.freq_tbl(
             test_data, sort=sort, normalize=normalize), tuple) == True
-        # Check '_fileds' attributes match test data columns names
+        # Check '_fileds' attributes match test data string columns names
         assert dc.freq_tbl(
-            test_data, sort=sort, normalize=normalize)._fields == tuple(test_data.columns)
+            test_data, sort=sort, normalize=normalize)._fields == ('likert_encode', 'str_encode', 'onehot_encode', 'case_convert', 'misspell')
         # Check length
         assert len(dc.freq_tbl(test_data, sort=sort, normalize=normalize)) == 5
+
+# ---------------------------------------------------------------------------- #
+#                        Tests for case_convert function                       #
+# ---------------------------------------------------------------------------- #
+
+
+class TestCaseConvert:
+    """
+    Tests for the case_convert helper function.
+    """
+
+    # --------------------- Tests that exceptions are raised --------------------- #
+
+    def test_case_convert_errors(self, test_data):
+        """
+        Tests that case convert raises exceptions when 'df', 'cols' and 'to' are passed invalid inputs.
+        """
+
+        # Invalid input for 'df', which creates unique error messages due to polymorphism
+        with pytest.raises(AttributeError, match="no attribute 'columns'"):
+            dc.case_convert(df=pd.Series(('Upper', 'lower', 'case')))
+        with pytest.raises(AttributeError, match="no attribute 'columns'"):
+            dc.case_convert(df=['Upper', 'Word'])
+        with pytest.raises(AttributeError, match="no attribute 'copy'"):
+            dc.case_convert(df=('str', ))
+
+        # Range offset for 'cols'
+        with pytest.raises(TypeError, match="'cols' must be a sequence like a list or tuple or a single string"):
+            dc.case_convert(df=test_data, cols=range(0, 3))
+
+        # Invalid inputs for 'to'
+        # Numeric
+        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
+            dc.case_convert(df=test_data, cols='case_convert', to=3)
+        # Boolean
+        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
+            dc.case_convert(df=test_data, cols='case_convert', to=True)
+        # List
+        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
+            dc.case_convert(df=test_data, cols='case_convert',
+                            to=['lower', 'upper'])
+        # Single element tuple
+        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
+            dc.case_convert(
+                df=test_data, cols='case_convert', to=('lower', ))
+
+    # ------------------- Tests that custom exception is raised ------------------ #
+
+    def test_case_convert_custom_error(self, test_data):
+        """
+        Test that when user passes non 'string' columns in 'cols' the function raises InvalidColumnDtypeError.
+        """
+
+        with pytest.raises(InvalidColumnDtypeError, match=escape("Columns ['invalid_case_convert'] are invalid as dtype 'string' is expected")):
+            dc.case_convert(
+                test_data, ['invalid_case_convert', 'case_convert'])
+
+    # -------------------------- Tests for functionality ------------------------- #
+
+    @pytest.mark.parametrize(
+        "cols, to",
+        [
+            # No user supplied columns
+            (None, 'lower'),
+            (None, 'upper'),
+            (None, 'title'),
+            (None, 'capitalize'),
+            # User supplied columns
+            ('case_convert', 'lower'),
+            (('case_convert', 'str_encode'), 'upper'),
+            (['misspell', 'case_convert'], 'title'),
+            ('misspell', 'capitalize')
+        ],
+        scope='function'
+    )
+    def test_case_convert(self, test_data, cols, to):
+        """
+        Test that case_convert returns expected results given inputs.
+        """
+
+        # Test branches
+        type(dc.case_convert(test_data, cols=cols, to=to)) == type(pd.DataFrame())

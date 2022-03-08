@@ -21,7 +21,7 @@ from collections import namedtuple
 # ------------------------------- Intra-package ------------------------------ #
 
 from pycitizen.exceptions import ColumnDtypeInferError, ColumnNameKeyWordError, ColumnNameStartWithDigitError, InvalidIdentifierError, InvalidColumnDtypeError
-from pycitizen.predicates import is_sequence
+from pycitizen.predicates import is_sequence, is_sequence_str
 
 # ---------------------------------------------------------------------------- #
 #                               Cleaning helpers                               #
@@ -97,8 +97,8 @@ def clean_col_nms(df, inplace=False):
         df = df.copy()
 
     original_col_nms = df.columns.tolist()
-    # \W matches any character that is not a 'word character' (alphanumeric & underscore). Equivalent to [^A-Za-z0-9_]
-    new_col_nms = (sub('\W', '', col.lower())
+    # [^a-zA-Z0-9_] matches any character that is not a 'word character' (alphanumeric & underscore), which equivalent to \W
+    new_col_nms = (sub('[^a-zA-Z0-9_]', '', col.lower())
                    for col in original_col_nms)
     # Remove leading characters until a letter
     # [^ ] is negated set, matching any character that is not in this set
@@ -168,9 +168,9 @@ def case_convert(df, cols=None, to='lower', inplace=False):
     ----------
     df : DataFrame
     cols : Sequence of str, optional
-        A sequence of column names , by default None, which converts all columns that can be inferred as having 'string' dtypes.
+        A sequence of column names, by default None, which converts all columns that can be inferred as having 'string' dtypes.
     to : str, optional
-        The direction or type of case conversion, by default 'lower'.
+        The direction or type of case conversion. One of 'lower', 'upper', 'title', or 'capitalize', by default 'lower'.
     inplace : bool, optional
         Whether to return a new DataFrame, by default False.
 
@@ -182,15 +182,18 @@ def case_convert(df, cols=None, to='lower', inplace=False):
     Raises
     ------
     TypeError
-        The argument 'cols' must be registered as a Sequence.
+        The argument 'cols' must be registered as a Sequence or a single string.
     InvalidColumnDtypeError
         User supplied columns contain non-string columns.
     ValueError
         Direction or type of case conversion must either be 'lower', 'upper', 'title', or 'capitalize'.
     """
-    # If user supplies cols, check that input is a sequence
-    if not is_sequence(cols) and cols is not None:
-        raise TypeError("'col' must be a sequence like a list or tuple")
+    if not is_sequence_str(cols) and cols is not None:
+        raise TypeError(
+            "'cols' must be a sequence like a list or tuple or a single string")
+    # Selecting by column names df[cols] cannot use tuples
+    if isinstance(cols, tuple):
+        cols = list(cols)
 
     # Create a copy if inplace=False
     if (not inplace):
@@ -202,21 +205,29 @@ def case_convert(df, cols=None, to='lower', inplace=False):
             value=df[col], skipna=True) == 'string' for col in df.columns.tolist()]
         cols = list(compress(df.columns.tolist(), bool_is_str))
     else:
-        bool_is_str = [pd.api.types.infer_dtype(
-            value=df[col], skipna=True) == 'string' for col in cols]
+        # If cols is a single string, then create an interable object before list comprehension
+        if isinstance(cols, str):
+            bool_is_str = [pd.api.types.infer_dtype(
+                value=df[col], skipna=True) == 'string' for col in (cols, )]
+        else:
+            # If a sequence of strings, then apply list comprehension
+            bool_is_str = [pd.api.types.infer_dtype(
+                value=df[col], skipna=True) == 'string' for col in cols]
         # If user supplies columns, check input column data types
         if not all(bool_is_str):
             raise InvalidColumnDtypeError(col_nms=list(
                 compress(cols, [not element for element in bool_is_str])), dtype='string')
 
+    # Use pd.DataFrame since, if user passes a single str as 'cols', df[cols] would be a series, and lambda 'x' would be the elements
+    # Apply relies on the Series 'str' attribute
     if (to == 'upper'):
-        df[cols] = df[cols].apply(lambda x: x.str.upper())
+        df[cols] = pd.DataFrame(df[cols]).apply(lambda x: x.str.upper())
     elif (to == 'lower'):
-        df[cols] = df[cols].apply(lambda x: x.str.lower())
+        df[cols] = pd.DataFrame(df[cols]).apply(lambda x: x.str.lower())
     elif (to == 'title'):
-        df[cols] = df[cols].apply(lambda x: x.str.title())
+        df[cols] = pd.DataFrame(df[cols]).apply(lambda x: x.str.title())
     elif (to == 'capitalize'):
-        df[cols] = df[cols].apply(lambda x: x.str.capitalize())
+        df[cols] = pd.DataFrame(df[cols]).apply(lambda x: x.str.capitalize())
     else:
         raise ValueError(
             "'to' must either by 'lower', 'upper', 'title', or 'capitalize'")

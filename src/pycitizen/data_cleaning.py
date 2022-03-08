@@ -167,8 +167,8 @@ def case_convert(df, cols=None, to='lower', inplace=False):
     Parameters
     ----------
     df : DataFrame
-    cols : Sequence of str, optional
-        A sequence of column names, by default None, which converts all columns that can be inferred as having 'string' dtypes.
+    cols : str or Sequence of str, optional
+        A single column name or a sequence of column names, by default None, which converts all columns that can be inferred as having 'string' dtypes.
     to : str, optional
         The direction or type of case conversion. One of 'lower', 'upper', 'title', or 'capitalize', by default 'lower'.
     inplace : bool, optional
@@ -231,6 +231,67 @@ def case_convert(df, cols=None, to='lower', inplace=False):
     else:
         raise ValueError(
             "'to' must either by 'lower', 'upper', 'title', or 'capitalize'")
+
+    # Return copy
+    if (not inplace):
+        return df
+    else:
+        return None
+
+# ------------------- Function for correcting misspellings ------------------- #
+
+
+def correct_misspell(df, cols, mapping, inplace=False):
+    """
+    This function corrects for potential spelling mistakes in the fields. 
+    Users should first identify columns containing misspellings with the 
+    help of the `freq_tbl()` function. Then, call this function to correct 
+    for any misspellings by passing a dictionary.  
+
+    Parameters
+    ----------
+    df : DataFrame
+        A DataFrame containing spelling errors.
+    cols : str or Sequence of str
+        A single column name or a sequence of column names, which must be inferred as having 'string' dtypes.
+    mapping : dict
+        A dictionary can be used to specify different replacement values for different existing values. For example, {'a': 'b', 'y': 'z'} replaces the value 'a' with 'b' and 'y' with 'z'.
+    inplace : bool, optional
+        Whether to return a new DataFrame, by default False.
+
+    Returns
+    -------
+    DataFrame
+        A DataFrame with transformed columns or None if inplace=True.
+
+    Raises
+    ------
+    TypeError
+        The argument 'cols' must be registered as a Sequence or a single string.
+    InvalidColumnDtypeError
+        User supplied columns contain non-string columns.
+    """
+    # Create a copy if inplace=False
+    if (not inplace):
+        df = df.copy()
+
+    # Check input type
+    if not is_sequence_str(cols):
+        raise TypeError(
+            "'cols' must be a sequence like a list or tuple or a single string")
+    # Cast to list object
+    if isinstance(cols, tuple):
+        cols = list(cols)
+
+    bool_is_str = [pd.api.types.infer_dtype(
+        value=df[col], skipna=True) == 'string' for col in cols]
+    # Check input column data types
+    if not all(bool_is_str):
+        raise InvalidColumnDtypeError(col_nms=list(
+            compress(cols, [not element for element in bool_is_str])), dtype='string')
+
+    # Replace values based on user supplied dictionary
+    df[cols] = df[cols].replace(to_replace=mapping)
 
     # Return copy
     if (not inplace):

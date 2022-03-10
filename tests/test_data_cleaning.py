@@ -176,7 +176,7 @@ class TestCaseConvert:
 
     def test_case_convert_errors(self, test_data):
         """
-        Tests that case convert raises exceptions when 'df', 'cols' and 'to' are passed invalid inputs.
+        Tests that case_convert raises exceptions when 'df', 'cols' and 'to' are passed invalid inputs.
         """
 
         # Invalid input for 'df', which creates unique error messages due to polymorphism
@@ -238,8 +238,87 @@ class TestCaseConvert:
     )
     def test_case_convert(self, test_data, cols, to):
         """
-        Test that case_convert returns expected results given inputs.
+        Test that case_convert returns expected results given inputs with branches.
         """
 
         # Test branches
         type(dc.case_convert(test_data, cols=cols, to=to)) == type(pd.DataFrame())
+
+
+# ---------------------------------------------------------------------------- #
+#                      Tests for correct_misspell function                     #
+# ---------------------------------------------------------------------------- #
+
+
+class TestMisspell:
+    """
+    Tests for the correct_misspell helper function.
+    """
+
+    # ------------------------ Tests for exceptions raised ----------------------- #
+
+    def test_correct_misspell_errors(self, test_data):
+        """
+        Tests that correct_misspell raises exceptions when 'df', 'cols' and 'mapping' are passed invalid inputs.
+        """
+
+        # Invalid input for 'df', which creates unique error messages due to polymorphism, but usually AttributeError or KeyError
+        # First place that may raise an exception is the '.copy' method
+        # The second place is keyword when subsetting df[cols] or df[col]
+        with pytest.raises(AttributeError):
+            dc.correct_misspell((1, 2, 3), cols='misspell',
+                                mapping={'democract': 'democrat'})
+        with pytest.raises(KeyError):
+            dc.correct_misspell(pd.Series(
+                ['misspell', 'correct_spell']), cols='misspell', mapping={'democract': 'democrat'})
+
+        # Range offset for 'cols'
+        with pytest.raises(TypeError, match="'cols' must be a sequence like a list or tuple or a single string"):
+            dc.correct_misspell(df=test_data, cols=range(
+                0, 3), mapping={'democract': 'democrat'})
+        # Supplying unknown cols should return KeyErrors (handled by pandas)
+        with pytest.raises(KeyError):
+            dc.correct_misspell(df=test_data, cols='does_not_exist', mapping={
+                                'democract': 'democrat'})
+        with pytest.raises(KeyError):
+            dc.correct_misspell(df=test_data, cols=['misspell', 'does_not_exist2'], mapping={
+                                'democract': 'democrat'})
+
+        # Invalid inputs for 'mapping'
+        # Invalid types
+        with pytest.raises(TypeError, match="The argument 'mapping' must be a dictionary object"):
+            dc.correct_misspell(df=test_data, cols=[
+                                'misspell'], mapping=['str'])
+
+    # ------------------- Tests that custom exception is raised ------------------ #
+
+    def test_correct_misspell_custom_error(self, test_data):
+        """
+        Test that when user passes non 'string' columns in 'cols' the function raises InvalidColumnDtypeError.
+        """
+
+        with pytest.raises(InvalidColumnDtypeError, match=escape("Columns ['invalid_case_convert'] are invalid as dtype 'string' is expected")):
+            dc.correct_misspell(df=test_data, cols=[
+                                'misspell', 'invalid_case_convert'], mapping={'democract': 'democrat'})
+
+    # -------------------------- Tests for functionality ------------------------- #
+
+    @pytest.mark.parametrize(
+        "cols, mapping",
+        [
+            # Single str
+            ['misspell', {'repulican': 'republican',
+                          'democract': 'democrat'}],
+            # Sequence of str
+            [('misspell', 'case_convert'), {'Upper': 'Changed'}]
+        ],
+        scope='function'
+    )
+    def test_correct_misspell(self, test_data, cols, mapping):
+        """
+        Test that correct_misspell returns expected results given inputs with branches.
+        """
+
+        # Test branches
+        type(dc.correct_misspell(df=test_data, cols=cols,
+             mapping=mapping)) == type(pd.DataFrame())

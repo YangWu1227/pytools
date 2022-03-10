@@ -205,12 +205,12 @@ def case_convert(df, cols=None, to='lower', inplace=False):
             value=df[col], skipna=True) == 'string' for col in df.columns.tolist()]
         cols = list(compress(df.columns.tolist(), bool_is_str))
     else:
-        # If cols is a single string, then create an interable object before list comprehension
+        # If cols is a single string, then use the string to select column from df directly
         if isinstance(cols, str):
             bool_is_str = [pd.api.types.infer_dtype(
-                value=df[col], skipna=True) == 'string' for col in (cols, )]
+                value=df[cols], skipna=True) == 'string']
         else:
-            # If a sequence of strings, then apply list comprehension
+            # If cols a sequence of strings, then apply list comprehension
             bool_is_str = [pd.api.types.infer_dtype(
                 value=df[col], skipna=True) == 'string' for col in cols]
         # If user supplies columns, check input column data types
@@ -246,7 +246,10 @@ def correct_misspell(df, cols, mapping, inplace=False):
     This function corrects for potential spelling mistakes in the fields. 
     Users should first identify columns containing misspellings with the 
     help of the `freq_tbl()` function. Then, call this function to correct 
-    for any misspellings by passing a dictionary.  
+    for any misspellings by passing a dictionary. For pattern matching with
+    regular expressions, the `pd.DataFrame.replace()` method is still
+    preferred and should offer more functionality. Note: the function does 
+    not error if 'mapping' contains values that do not exist in 'df'.
 
     Parameters
     ----------
@@ -267,10 +270,15 @@ def correct_misspell(df, cols, mapping, inplace=False):
     Raises
     ------
     TypeError
+        The argument 'mapping' must be dictionary object.
+    TypeError
         The argument 'cols' must be registered as a Sequence or a single string.
     InvalidColumnDtypeError
         User supplied columns contain non-string columns.
     """
+    if (not isinstance(mapping, dict)):
+        raise TypeError("The argument 'mapping' must be a dictionary object")
+
     # Create a copy if inplace=False
     if (not inplace):
         df = df.copy()
@@ -283,8 +291,15 @@ def correct_misspell(df, cols, mapping, inplace=False):
     if isinstance(cols, tuple):
         cols = list(cols)
 
-    bool_is_str = [pd.api.types.infer_dtype(
-        value=df[col], skipna=True) == 'string' for col in cols]
+    # If cols is a single string, then use the string to select column from df directly
+    if isinstance(cols, str):
+        bool_is_str = [pd.api.types.infer_dtype(
+            value=df[cols], skipna=True) == 'string']
+    else:
+        # If a sequence of strings, then apply list comprehension
+        bool_is_str = [pd.api.types.infer_dtype(
+            value=df[col], skipna=True) == 'string' for col in cols]
+
     # Check input column data types
     if not all(bool_is_str):
         raise InvalidColumnDtypeError(col_nms=list(

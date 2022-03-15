@@ -313,3 +313,252 @@ def correct_misspell(df, cols, mapping, inplace=False):
         return df
     else:
         return None
+
+# ------- Function for identifying columns that contain missing values ------- #
+
+
+def find_missing(df, axis=0):
+    """
+    This is a helper function that identifies columns in a DataFrame
+    that contain missing values.
+
+    Parameters
+    ----------
+    df : DataFrame
+    axis : int, optional
+        Whether to return rows or columns containing missing values, by default 0 (columns).
+
+    Returns
+    -------
+    Series of bool
+        Boolean series indicating columns or rows with missing values.
+
+    Raises
+    ------
+    TypeError
+        The argument 'axis' must be an integer.
+    ValueError
+        The argument 'axis' must either be 1 (rows) or 0 (columns).
+    """
+    if not isinstance(axis, int):
+        raise TypeError("The argument 'axis' must be an integer")
+
+    if axis == 1:
+        return df.isna().any(axis=1)[lambda x: x]
+    elif axis == 0:
+        return df.isna().any(axis=0)[lambda x: x]
+    else:
+        raise ValueError("'axis' must either be 1 (rows) or 0 (columns)")
+
+# ---------------------------------------------------------------------------- #
+#                              Encoding functions                              #
+# ---------------------------------------------------------------------------- #
+
+# ----------------------- Function for ordinal encoding ---------------------- #
+
+
+def likert_encode(df, mapping, return_class=False):
+    """
+    This function transforms specified columns using likert scale. Note that
+    this function is defined to handle cases where some columns contain missing
+    values. Use the helper function contain_null() to determine whether columns
+    that are to be transformed contain any missing values.
+    Note: The results of this transformation may be inaccurate if
+    the columns contain misspellings and/or case inconsistencies. Use
+    freq_tbl() to identify those issues. Then, use case_convert() and
+    correct_misspell() to address those issues before proceeding with
+    the transformation.
+
+    Parameters
+    ----------
+    df : Dataframe
+    mapping : A list of dictionaries: 
+        - This must be a mapping of categories to labels for the encoding.
+        - The dict contains a list of keys 'col' and values 'mapping'.
+        - The value of each 'col' should be a feature name.
+        - The value of each 'mapping' should be a dictionary of 'original_label' to 'encoded_label'.
+        Example mapping: [
+            {'col': 'col_1', 'mapping': {'a': 1, 'b': 2}},
+            {'col': 'col_2', 'mapping': {'x': 1, 'y': 2}}
+        ]
+    return_class : bool, optional
+        Whether to return an object of class EcodedObject, which then may be serialized, by default False
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
+    # Create a copy
+    df = df.copy()
+
+    # Instantiate encoder
+    encoder = ce_OrdinalEncoder(
+        return_df=True,
+        mapping=mapping,
+        handle_unknown='return_nan'
+    )
+    # Fit and Transform
+    transformed_df = encoder.fit_transform(X=df)
+    # Select columns with float64 dtype
+    float_cols = transformed_df.select_dtypes(include=np.float64)
+    # Cast float64 to int64
+    transformed_df[float_cols.columns] = float_cols.astype("Int64")
+    # Map pd.NA to None
+    transformed_df.replace(to_replace={pd.NA: None}, inplace=True)
+
+    # Create a class
+    class EncodedObject:
+        def __init__(self, df, mapping):
+            self.df = df
+            self.mapping = mapping
+    # Declare global variable
+    global encoded_object
+    # Instantiate an object of class EcodedObject
+    encoded_object = EncodedObject(transformed_df, mapping)
+
+    if return_class:
+        return encoded_object
+    else:
+        return encoded_object.df
+
+# ------------------------- One-hot or dummy encoding ------------------------ #
+
+
+def onehot_encode(df, col):
+    """
+    Use this function to onehot (or dummy) transform categorical 
+    features, producing one feature per category, each as a binary 
+    indicator (0-1 allocation). Note: The results of this transformation will 
+    be inaccurate if the columns contain misspellings and case inconsistencies. 
+    Always use case_convert() and/or correct_misspell() to address those issues
+    first and foremost. Post-transformation processing, such as reordering
+    the columns, can be carried out using the helper function relocate().
+
+    Parameters
+    ----------
+    df : DataFrame
+    col : Sequence of str
+        A sequence of column names to be transformed.
+
+    Returns
+    -------
+    DataFrame
+        The transformed DataFrame containing newly generated binary features.
+
+    Raises
+    ------
+    TypeError
+       The supplied columns must all be string columns.
+    """
+    # Create a copy
+    df = df.copy()
+    # Subset
+    subset = df[col]
+    # Check columns data types
+    if (not all(subset.apply(lambda x: x.dtype == object))):
+        raise TypeError("'col' must be a list of text columns")
+
+    # Instantiate encoder
+    encoder = ce_OneHotEncoder(
+        return_df=True,
+        use_cat_names=True,
+        # This needs to be discussed
+        handle_unknown='error'
+    )
+    # Fit and Transform
+    transformed_df = encoder.fit_transform(X=subset)
+    # Column-bind to original data frame
+    new_transformed_df = pd.concat(
+        objs=[df, transformed_df],
+        # Columns
+        axis=1,
+        copy=False
+    )
+
+    return new_transformed_df
+
+# ------------------------- String-to-string encoding ------------------------ #
+
+
+def str_encode(df, mapping):
+    """
+    This function recodes categorical variables as standardized strings.
+    For example, 'female' = F, 'high school graduate no college' = 'HS, no BA', etc.
+    For encoding text variables that are ordinal in nature, use likert_case(), which 
+    recodes text columns as numerical columns. This function is meant to complement
+    likert_encode(), and is restricted to string-to-string encoding. 
+    The user interface of this function is consistent with likert_encode() in that it
+    has the same arguments. Thus, there is only one pattern to learn and users may opt
+    to use one over the other depending on the data cleaning task at hand.
+
+    Parameters
+    ----------
+    df : DataFrame
+    mapping : A list of dictionaries:
+    - This must be a mapping of categories to labels for the encoding.
+    - The dict contains a list of of keys 'col' and values 'mapping'.
+    - The value of each 'col' should be the feature name.
+    - The value of each 'mapping' should be a dictionary of 'original_label' to 'encoded_label'.
+    Example mapping: [
+            {'col': 'col_1', 'mapping': {'a': 'str2', 'b': 'str2'}},
+            {'col: 'col_2', 'mapping': {'x': 'str3', 'y': 'str4'}}
+    ]
+
+    Returns
+    -------
+    DataFrame
+        A DataFrame with specified columns transformed as standardized strings.
+
+    Raises
+    ------
+    TypeError
+        Supplied columns must all be text fields.
+    TypeError
+        This function does NOT support encoding string to numerical.
+    """
+    # Create copy
+    df = df.copy()
+
+    # This step extracts column names into a list
+    # The mapping argument is a list of dicts each structured as {'col': 'col_name', 'mapping':{}}
+    # We do not want the keys ('col' and 'mapping'), but the values ('col_name', {})
+    # The values can be accessed via dict_obj.values(), which returns objects of class 'dict_values'
+    # The first element of each 'dict_values' is 'col_name', and the second is the mapping dict {}
+    # For each 'dict_values', extract the first element [0]
+    # This list comprehension then returns a list of 'col_names'
+    col_names = [list(dict_obj.values())[0] for dict_obj in mapping]
+    # Same for mapping dict {}, which is the second element of each 'dict_values'
+    mapping_dicts = [list(dict_obj.values())[1] for dict_obj in mapping]
+
+    # Enforce the rule that the mapping dicts must map 'string' to 'string'
+    # This makes this function's goal restrictive, but it may prevent unanticipated bugs
+    # Let likert_encode() handle string to integer mapping
+    # Check column data types, if not all text columns, raise an error
+    if (not all(df[col_names].apply(lambda x: x.dtype == object))):
+        raise TypeError(
+            "'col' in the 'mapping' dictionary must be a list of text columns"
+        )
+
+    # The comprehension below returns a list of sublists
+    # Each sublist contains the values for each mapping dict in mapping_dicts
+    list_of_sublists = [list(map_dict.values()) for map_dict in mapping_dicts]
+    # Flatten the nested list above to get all values in one single list
+    # The first part is (for sublist in list_of_sublists), which gets each sublist
+    # Then, (value for value in sublist) gets the value from each sublist
+    # These values are then stored in the outer-most single list []
+    all_values = [value for sublist in list_of_sublists for value in sublist]
+    # Test if all values are strings, if not, raise an error
+    if (not all([isinstance(val, str) for val in all_values])):
+        raise TypeError(
+            "'mapping' must map string to string; use likert_encode() for mapping text columns to to integer columns"
+        )
+
+    # We can now use the map() method of pandas series to encode
+    # Each iteration, we replace values in col_names[i] as specified by mapping_dicts[i]
+    for i in range(len(mapping)):
+        df[col_names[i]] = (
+            df[col_names[i]].map(mapping_dicts[i], na_action='ignore')
+        )
+
+    return df

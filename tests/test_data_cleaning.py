@@ -2,6 +2,7 @@
 #                           Load packages and modules                          #
 # ---------------------------------------------------------------------------- #
 
+from io import StringIO
 import pandas as pd
 import numpy as np
 import pytest
@@ -9,6 +10,7 @@ import pytest
 # ----------------------------- Standard library ----------------------------- #
 
 import os
+from io import StringIO
 from re import escape
 from collections import namedtuple
 
@@ -152,7 +154,9 @@ class TestFreqTable:
         "sort, normalize",
         [
             (True, False),
-            (False, True)
+            (False, True),
+            (True, True),
+            (False, False)
         ],
         scope='function'
     )
@@ -161,14 +165,71 @@ class TestFreqTable:
         Test that freq_tbl() returns the correct class and length given a test dataframe.
         """
 
+        # Outputs
+        tbls = dc.freq_tbl(test_data, dropna=True,
+                           sort=sort, normalize=normalize)
+        tbls_true_false = dc.freq_tbl(test_data, dropna=True,
+                                      sort=True, normalize=False)
+        tbls_false_true = dc.freq_tbl(test_data, dropna=True,
+                                      sort=False, normalize=True)
+
+        # Expected for two branches
+        expected_index = {
+            # Sort=True
+            'sort_true': (
+                ['C', 'A', 'D', 'B', 'E'],
+                ['bachelor', 'highschool', 'grad', 'college'],
+                ['A', 'B'],
+                ['Upper', 'lower'],
+                ['republican', 'democrat', 'democract', 'repulican']
+            ),
+            # Sort=False
+            'sort_false': (
+                ['A', 'B', 'C', 'D', 'E'],
+                ['bachelor', 'highschool', 'grad', 'college'],
+                ['A', 'B'],
+                ['Upper', 'lower'],
+                ['republican', 'repulican', 'democrat', 'democract']
+            )
+        }
+        expected_values = {
+            # Normalize=False
+            'normalize_false': [
+                np.array([[3], [2], [2], [1], [1]]),
+                np.array([[2], [2], [2], [2]]),
+                np.array([[5], [5]]),
+                np.array([[5], [3]]),
+                np.array([[4], [3], [2], [1]])
+            ],
+            # Normalize=True
+            'normalize_true': [
+                np.array([[0.2], [0.1], [0.3], [0.2], [0.1]]),
+                np.array([[0.2], [0.2], [0.2], [0.2]]),
+                np.array([[0.5], [0.5]]),
+                np.array([[0.6], [0.4]]),
+                np.array([[0.4], [0.1], [0.3], [0.2]])
+            ]
+        }
+
         # Tuple
-        assert isinstance(dc.freq_tbl(
-            test_data, sort=sort, normalize=normalize), tuple) == True
+        assert isinstance(tbls, tuple) == True
         # Check '_fileds' attributes match test data string columns names
-        assert dc.freq_tbl(
-            test_data, sort=sort, normalize=normalize)._fields == ('likert_encode', 'str_encode', 'onehot_encode', 'case_convert', 'misspell')
+        assert tbls._fields == (
+            'likert_encode', 'str_encode', 'onehot_encode', 'case_convert', 'misspell')
         # Check length
-        assert len(dc.freq_tbl(test_data, sort=sort, normalize=normalize)) == 5
+        assert len(tbls) == 5
+
+        # Branch (sort=True and normalize=False)
+        for num, tbl in enumerate(tbls_true_false):
+            assert all(tbl.index == expected_index['sort_true'][num])
+            assert all(tbl.values ==
+                       expected_values['normalize_false'][num])
+
+        # Branch (sort=False and normalize=True)
+        for num, tbl in enumerate(tbls_false_true):
+            assert all(tbl.index == expected_index['sort_false'][num])
+            assert all(tbl.round(1).values ==
+                       expected_values['normalize_true'][num])
 
 # ---------------------------------------------------------------------------- #
 #                        Tests for case_convert function                       #
@@ -252,6 +313,37 @@ class TestCaseConvert:
         # Test branches
         type(dc.case_convert(test_data, cols=cols, to=to)) == type(pd.DataFrame())
 
+        # Test two branches
+        branch1 = dc.case_convert(test_data, cols=None, to='lower')
+        branch2 = dc.case_convert(test_data, cols=(
+            'case_convert', 'str_encode'), to='upper')
+
+        # Branch 1
+        pd.testing.assert_frame_equal(
+            left=branch1,
+            right=pd.DataFrame({
+                'likert_encode': ('a', 'a', 'b', 'c', 'd', 'd', 'c', pd.NA, 'c', 'e'),
+                'str_encode': ('bachelor', 'highschool', pd.NA, 'grad', 'grad', pd.NA, 'highschool', 'college', 'college', 'bachelor'),
+                'onehot_encode': ('a',) * 5 + ('b',) * 5,
+                'case_convert': ('upper',) * 5 + ('lower',) * 3 + (pd.NA, pd.NA),
+                'misspell': ('republican',) * 4 + ('repulican',) + ('democrat',) * 3 + ('democract',) * 2,
+                'invalid_case_convert': tuple(range(0, 10))
+            })
+        )
+
+        # Branch 2
+        pd.testing.assert_frame_equal(
+            left=branch2,
+            right=pd.DataFrame({
+                'likert_encode': ('A', 'A', 'B', 'C', 'D', 'D', 'C', pd.NA, 'C', 'E'),
+                'str_encode': ('BACHELOR', 'HIGHSCHOOL', pd.NA, 'GRAD', 'GRAD', pd.NA, 'HIGHSCHOOL', 'COLLEGE', 'COLLEGE', 'BACHELOR'),
+                'onehot_encode': ('A',) * 5 + ('B',) * 5,
+                'case_convert': ('UPPER',) * 5 + ('LOWER',) * 3 + (pd.NA, pd.NA),
+                'misspell': ('republican',) * 4 + ('repulican',) + ('democrat',) * 3 + ('democract',) * 2,
+                'invalid_case_convert': tuple(range(0, 10))
+            })
+        )
+
 
 # ---------------------------------------------------------------------------- #
 #                      Tests for correct_misspell function                     #
@@ -317,7 +409,7 @@ class TestMisspell:
             # Single str
             ['misspell', {'repulican': 'republican',
                           'democract': 'democrat'}],
-            # Sequence of str
+            # Sequence of str (tuple)
             [('misspell', 'case_convert'), {'Upper': 'Changed'}]
         ],
         scope='function'
@@ -327,9 +419,47 @@ class TestMisspell:
         Test that correct_misspell returns expected results given inputs with branches.
         """
 
-        # Test branches
+        # Test types
         type(dc.correct_misspell(df=test_data, cols=cols,
              mapping=mapping)) == type(pd.DataFrame())
+
+        # Single str branch
+        pd.testing.assert_frame_equal(
+            left=pd.DataFrame(
+                dc.correct_misspell(df=test_data, cols='misspell', mapping={
+                    'repulican': 'republican', 'democract': 'democrat'}).misspell
+            ),
+            right=pd.DataFrame(
+                {'misspell': ('republican',) * 5 + ('democrat',) * 5}
+            )
+        )
+
+        # Sequence of str (tuple) branch
+        # This triggers the extra casting branch--- tuple -> list
+        pd.testing.assert_frame_equal(
+            left=pd.DataFrame(
+                dc.correct_misspell(df=test_data, cols=('misspell', 'case_convert'), mapping={
+                                    'Upper': 'Changed'}).case_convert
+            ),
+            right=pd.DataFrame(
+                {'case_convert': ('Changed',) * 5 + ('lower',)
+                 * 3 + (pd.NA, pd.NA)}
+            )
+        )
+
+        # Sequence of str (list) branch
+        # No casting from tuple -> list
+        pd.testing.assert_frame_equal(
+            left=pd.DataFrame(
+                dc.correct_misspell(df=test_data, cols=['misspell', 'case_convert'], mapping={
+                                    'Upper': 'Changed'}).case_convert
+            ),
+            right=pd.DataFrame(
+                {'case_convert': ('Changed',) * 5 + ('lower',)
+                 * 3 + (pd.NA, pd.NA)}
+            )
+        )
+
 
 # ---------------------------------------------------------------------------- #
 #                        Tests for find_missing function                       #

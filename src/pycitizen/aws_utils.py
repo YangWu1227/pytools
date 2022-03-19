@@ -5,6 +5,7 @@
 import pandas as pd
 import numpy as np
 import psycopg2 as py
+from psycopg2.extensions import connection
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
@@ -13,12 +14,12 @@ from botocore.exceptions import ClientError, NoCredentialsError
 import os
 import sys
 import threading
+from typing import List, Dict, Tuple, Union, Optional
 
 # ------------------------------- Intra-package ------------------------------ #
 
 from pycitizen.exceptions import ColumnDtypeInferError
 from pycitizen.predicates import is_sequence
-
 
 # ---------------------------------------------------------------------------- #
 #                             SQL commands creation                            #
@@ -27,7 +28,7 @@ from pycitizen.predicates import is_sequence
 # ------- Function that finds the max string length in each text column ------ #
 
 
-def _max_len_tbl(df):
+def _max_len_tbl(df: pd.DataFrame) -> pd.DataFrame:
     """
     This function takes a data frame object and finds the maximum string
     length in each text column.
@@ -60,7 +61,7 @@ def _max_len_tbl(df):
 # -------------------- Function that finds float variables ------------------- #
 
 
-def _float_cols(df):
+def _float_cols(df: pd.DataFrame) -> pd.DataFrame:
     """
     This function takes a data frame object and finds the float columns.
 
@@ -82,7 +83,7 @@ def _float_cols(df):
 # ------------------ Function that finds datetime variables ------------------ #
 
 
-def _datetime_cols(df):
+def _datetime_cols(df: pd.DataFrame) -> List[str]:
     """
     This function takes a data frame object and finds the datatime64 columns.
 
@@ -102,7 +103,7 @@ def _datetime_cols(df):
 # ---------------- Function to create a CREATE TABLE statement --------------- #
 
 
-def create_statement(df, tbl_name, primary_key):
+def create_statement(df: pd.DataFrame, tbl_name: str, primary_key: str) -> str:
     """
     This function generates a single CREATE TABLE statement given a data frame and a table name. The CREATE
     TABLE statement is used to stage a shell of a table into which data will be copied either from S3 or directly
@@ -202,7 +203,9 @@ def create_statement(df, tbl_name, primary_key):
 # ----------- Function to generate multiple CREATE TABLE statements ---------- #
 
 
-def create_statements(df_seq, tbl_names, primary_keys):
+def create_statements(df_seq: Union[List[pd.DataFrame], Tuple[pd.DataFrame]],
+                      tbl_names: Union[List[str], Tuple[str]],
+                      primary_keys: Union[List[str], Tuple[str]]):
     """
     This function is a vectorized version of `create_statement()`, which takes a sequence of
     data frames, a sequence of table names, and a sequence of primary keys, returning a tuple of
@@ -260,7 +263,7 @@ class AwsCreds(object):
         AWS secret key.
     """
 
-    def __init__(self, access_key, secret_key):
+    def __init__(self, access_key: str, secret_key: str) -> None:
         """
         A parameterized class constructor
 
@@ -274,7 +277,7 @@ class AwsCreds(object):
         self.access_key = access_key
         self.secret_key = secret_key
 
-    def get_params(self):
+    def get_params(self) -> Tuple[str]:
         """
         A method for obtaining credentials as a tuple that may be unpacked and passed as function arguments.
 
@@ -288,7 +291,7 @@ class AwsCreds(object):
 # ---------------------- Helper function to get AWS keys --------------------- #
 
 
-def get_creds(path):
+def get_creds(path: str) -> Tuple[str]:
     """
     A helper function to retrieve and return AWS credentials in a tuple string form. Another method for getting aws credentials is through creating an `AwsCreds` objects. See `?AwsCreds` for details.
     To run this function, it is recommended that the user store his/her AWS credentials in a hidden directory, e.g., '~/.aws/credentials/accessKeys.csv'. The csv file should contain two columns--- 'Access key ID'
@@ -302,7 +305,7 @@ def get_creds(path):
 
     Returns
     -------
-    tuple
+    tuple of str
         A tuple of AWS credentials of the form `(access_key, secret_key)`.
     """
     creds = pd.read_csv(path)
@@ -354,7 +357,7 @@ class MyRedShift(object):
         self.user = user
         self.db_password = db_password
 
-    def get_params(self):
+    def get_params(self) -> Tuple[str]:
         """
         A method for obtaining connection parameters as a tuple that may be unpacked and passed as function arguments.
 
@@ -365,7 +368,7 @@ class MyRedShift(object):
         """
         return self.db_name, self.host, self.port, self.user, self.db_password
 
-    def connect(self):
+    def connect(self) -> py.extensions.connection:
         """
         A method for creating a database session and instantiating a connection object. The connection object will
         have access to all public methods and attributes of the `psycopg2` connection class, including `connection.close()`.
@@ -384,7 +387,7 @@ class MyRedShift(object):
         )
         return conn
 
-    def read_tbl(self, tbl, chunksize=None):
+    def read_tbl(self, tbl: str, chunksize: Optional[int] = None) -> pd.DataFrame:
         """
         A method for reading a table into a Pandas DataFrame. Warning: Reading large tables
         all at once may lead to memory issues.
@@ -415,7 +418,7 @@ class MyRedShift(object):
             )
         return pd.concat(list(gen_obj))
 
-    def read_query(self, sql, chunksize=None):
+    def read_query(self, sql: str, chunksize: Optional[int] = None) -> pd.DataFrame:
         """
         A method for reading a single sql query output into a Pandas DataFrame. Warning: Reading large results
         all at once may lead to memory issues.
@@ -448,7 +451,7 @@ class MyRedShift(object):
 # ------------------- Function to create tables in RedShift ------------------ #
 
 
-def create_tables(commands, db_name, host, port, user, db_password):
+def create_tables(commands: Tuple[str], db_name: str, host: str, port: str, user: str, db_password: str) -> None:
     """
     When passed a tuple of SQL commands, this function executes the commands and commits the
     changes to Redshift. For single table creation, use `(command, )` to pass a single-element
@@ -511,7 +514,15 @@ def create_tables(commands, db_name, host, port, user, db_password):
 # ------------ Function to copy tables from S3 bucket to database ------------ #
 
 
-def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port, user, db_password):
+def copy_tables(table_names: Union[List[str], Tuple[str]],
+                paths: Union[List[str], Tuple[str]],
+                access_key: str,
+                secret_key: str,
+                db_name: str,
+                host: str,
+                port: str,
+                user: str,
+                db_password: str) -> None:
     """
     This function accepts a sequence of table names and a sequence of data-source paths, and it loads data into a table in
     the database hosted on Amazon Redshift. Currently, the only implemented data-source is AWS S3. For database connection parameters, 
@@ -595,20 +606,27 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
 # ------------- Function to rename table columns in the database ------------- #
 
 
-def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_password):
+def rename_col(tbl_names: Union[List[str], Tuple[str], str],
+               old_nms: Union[List[str], Tuple[str], str],
+               new_nms: Union[List[str], Tuple[str], str],
+               db_name: str,
+               host: str,
+               port: str,
+               user: str,
+               db_password: str) -> None:
     """
     This function accepts strings or sequences of equal lengths, executing the `ALTER TABLE RENAME COLUMN` statements in the database. For batch executing multiple rename statements, 
-    the arguments must be sequences like a `list` or `tuple`. A special case is when a single string is supplied for the argument 'tbl_names', its length is automatically 
+    the arguments must be sequences like a `list` or `tuple`. A special case is when a single string is supplied for the argument 'tbl_names' and only this argument, its length is automatically 
     recycled to match those of the other two. Each element in the three sequences must match in order for the query to be executed successfully. For database connection parameters, you may store 
     all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing connection parameters. 
 
     Parameters
     ----------
-    tbl_names : Sequence of str or str
+    tbl_names : str or Sequence of str 
         A sequence containing table names or a single str.
-    old_nms : Sequence of str or str
+    old_nms : str or Sequence of str
         A sequence containing original column names or a single str.
-    new_nms : Sequence of str or str
+    new_nms : str or Sequence of str
         A sequence containing new column names or a single str.
     db_name : str
         Database name.
@@ -677,7 +695,13 @@ def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_passwo
  # ----------------- Function to rename tables in the database ---------------- #
 
 
-def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
+def rename_tbl(old_nms: Union[List[str], Tuple[str], str],
+               new_nms: Union[List[str], Tuple[str], str],
+               db_name: str,
+               host: str,
+               port: str,
+               user: str,
+               db_password: str) -> None:
     """
     This function accepts strings or sequences of equal lengths, executing the `ALTER TABLE RENAME TO` statements in the database. For batch executeing multiple rename statements, 
     the arguments must be sequences like a `list` or `tuple`. Each element in the two sequences must match in order for the query to be executed successfully. For database connection
@@ -686,9 +710,9 @@ def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
 
     Parameters
     ----------
-    old_nms : Sequence of str or str
+    old_nms : str or Sequence of str
         A sequence containing original table names or a single str.
-    new_nms : Sequence of str or str
+    new_nms : str or Sequence of str
         A sequence containing new table names or a single str.
     db_name : str
         Database name.
@@ -765,7 +789,7 @@ class ProgressPercentage(object):
     """
 
     # Class constructor
-    def __init__(self, filename):
+    def __init__(self, filename: str) -> None:
         """
         A parameterized class constructor.
 
@@ -780,7 +804,7 @@ class ProgressPercentage(object):
         # Create new lock object
         self._lock = threading.Lock()
 
-    def __call__(self, bytes_amount):
+    def __call__(self, bytes_amount: float) -> None:
         # To simplify, assume this is hooked up to a single filename
         with self._lock:
             self._bytes_seen_so_far += bytes_amount
@@ -802,7 +826,7 @@ class ProgressPercentage(object):
 # ------------------- Function to upload file to s3 bucket ------------------- #
 
 
-def upload_file(file_name, bucket, access_key, secret_key, object_name=None):
+def upload_file(file_name: str, bucket: str, access_key: str, secret_key: str, object_name: Optional[str] = None) -> None:
     """
     This function uploads a file to an S3 bucket. User must also provide the file path to his or her AWS credentials.
     See `?get_creds` or `?AwsCreds` for details on storing AWS credentials. Credit to the AWS SDK for the basic structure

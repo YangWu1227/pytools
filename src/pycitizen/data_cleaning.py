@@ -17,6 +17,7 @@ from itertools import compress
 from re import sub
 import keyword
 from collections import namedtuple
+from typing import List, Dict, Tuple, Union, Optional, NamedTuple
 
 # ------------------------------- Intra-package ------------------------------ #
 
@@ -30,7 +31,7 @@ from pycitizen.predicates import is_sequence, is_sequence_str
 # ------------------ Function to check column name integrity ----------------- #
 
 
-def check_col_nms(df):
+def check_col_nms(df: pd.DataFrame) -> None:
     """
     This function is a helper that checks the integrity of the column names. 
 
@@ -74,7 +75,7 @@ def check_col_nms(df):
 # --------------------- Function that cleans column names -------------------- #
 
 
-def clean_col_nms(df, inplace=False):
+def clean_col_nms(df: pd.DataFrame, inplace: Optional[bool] = False) -> Union[pd.DataFrame, None]:
     """
     This helper function removes any invalid character, e.g. special characters and white spaces, in a column name and removes 
     leading characters until a character from a-z or A-Z is matched. Note this function does not replace python keywords or reserved 
@@ -124,7 +125,7 @@ def clean_col_nms(df, inplace=False):
 # -------------- Function to create a tuple of frequency tables -------------- #
 
 
-def freq_tbl(df, dropna=False, **kwargs):
+def freq_tbl(df: pd.DataFrame, dropna: Optional[bool] = False, **kwargs: str) -> NamedTuple:
     """
     This function creates a sequence of freqency tables of the text fields in a DataFrame,
     which can be examined to identify misspellings and case inconsistencies. You may pass 
@@ -166,7 +167,10 @@ def freq_tbl(df, dropna=False, **kwargs):
 # ----------------------- Function for case conversion ----------------------- #
 
 
-def case_convert(df, cols=None, to='lower', inplace=False):
+def case_convert(df: pd.DataFrame,
+                 cols: Optional[Union[List[str], Tuple[str], str]] = None,
+                 to: Optional[str] = 'lower',
+                 inplace: Optional[bool] = False) -> Union[pd.DataFrame, None]:
     """
     This helper function converts the cases in the columns of a DataFrame; the aim is to address case inconsistencies 
     in string columns. Use this function to ensure values in a DataFrame are consistent with regards to case, which helps 
@@ -249,7 +253,7 @@ def case_convert(df, cols=None, to='lower', inplace=False):
 # ------------------- Function for correcting misspellings ------------------- #
 
 
-def correct_misspell(df, cols, mapping, inplace=False):
+def correct_misspell(df, cols, mapping, inplace=False) -> Union[pd.DataFrame, None]:
     """
     This function corrects for potential spelling mistakes in the fields. 
     Users should first identify columns containing misspellings with the 
@@ -325,7 +329,7 @@ def correct_misspell(df, cols, mapping, inplace=False):
 # ------- Function for identifying columns that contain missing values ------- #
 
 
-def find_missing(df, axis=0):
+def find_missing(df: pd.DataFrame, axis: Optional[int] = 0) -> pd.Series:
     """
     This is a helper function that identifies columns or rows in a DataFrame
     that contain missing values.

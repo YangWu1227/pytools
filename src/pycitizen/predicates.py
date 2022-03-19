@@ -9,7 +9,7 @@ from collections.abc import Sequence, ByteString
 # ------------------- Helper functions for input validation ------------------ #
 
 
-def is_sequence(seq):
+def is_sequence(seq: Sequence) -> bool:
     """
     This helper returns `True` if the input is a `collections.abc.Sequence` (except strings or bytestrings).
 
@@ -26,7 +26,7 @@ def is_sequence(seq):
     return isinstance(seq, Sequence) and not isinstance(seq, (str, ByteString, range))
 
 
-def is_sequence_str(seq):
+def is_sequence_str(seq: Sequence) -> bool:
     """
     This helper returns `True` if the input is a `collections.abc.Sequence` (except bytestrings).
 

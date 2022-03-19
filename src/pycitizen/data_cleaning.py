@@ -351,6 +351,7 @@ def find_missing(df, axis=0):
     if not isinstance(axis, int):
         raise TypeError("The argument 'axis' must be an integer")
 
+    # The lambda function simply returns the true elements of the boolean series
     if axis == 1:
         return df.isna().any(axis=1)[lambda x: x]
     elif axis == 0:

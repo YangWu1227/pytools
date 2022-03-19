@@ -222,15 +222,15 @@ class TestInputValidation:
     @pytest.mark.parametrize(
         "tbl_names, old_nms, new_nms",
         [
-            # Case 1 (single tbl_name)
+            # Case 1 (set tbl_name)
             (
-                "tbl_name",
+                {"tbl_name"},
                 ('old1', 'old2'),
                 ('new1', 'new2')
             ),
-            # Case 2 (single strings)
+            # Case 2 (tbl_names is a sequence while the other two are strings)
             (
-                "tbl_name",
+                ("tbl_name",),
                 "old",
                 "new"
             )
@@ -263,14 +263,14 @@ class TestInputValidation:
     @pytest.mark.parametrize(
         "old_nms, new_nms",
         [
-            # Case 1 (single old name)
+            # Case 1 (set old name)
             (
-                'old1',
+                {'old1'},
                 ('new1', 'new2')
             ),
-            # Case 2 (single strings)
+            # Case 2 (arguments must either be all strings or all sequences)
             (
-                "old",
+                ["old"],
                 "new"
             )
         ],
@@ -503,7 +503,12 @@ def create_commands():
     """
     Fixture for create_tables() function.
     """
-    return ('CREATE TABLE test1 (col INTEGER, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))', 'CREATE TABLE test2 (col2 VARCHAR(5), key2 VARCHAR(1) NOT NULL, PRIMARY KEY (key2))')
+    return (
+        'CREATE TABLE test1 (col INTEGER, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))',
+        'CREATE TABLE test2 (col2 VARCHAR(5), col2_2 REAL, key2 VARCHAR(1) NOT NULL, PRIMARY KEY (key2))',
+        'CREATE TABLE test3 (col3 INTEGER, key3 VARCHAR(1) NOT NULL, PRIMARY KEY (key3))',
+        'CREATE TABLE test4 (col4 VARCHAR(5), col4_4 REAL, key4 VARCHAR(1) NOT NULL, PRIMARY KEY (key4))',
+    )
 
 # ----------------- Tests for database interaction functions ----------------- #
 
@@ -535,19 +540,33 @@ def test_database_interaction(redshift, create_commands):
     df2 = db.read_tbl('test2', None)
     # Check if columns match those listed in the create statements
     assert df1.columns.tolist() == ['col', 'key']
-    assert df2.columns.tolist() == ['col2', 'key2']
+    assert df2.columns.tolist() == ['col2', 'col2_2', 'key2']
 
     # ----------------------------- Test rename table ---------------------------- #
 
-    # Change table names
+    # ---------------------------------- Case 1 ---------------------------------- #
+
+    # Change table names (multiple statements)
     au.rename_tbl(('test1', 'test2'), ('new1', 'new2'), *params)
     # Verify by reading the tables using their new names and checking if they contain original columns
     assert db.read_tbl('new1', None).columns.tolist() == ['col', 'key']
-    assert db.read_tbl('new2', None).columns.tolist() == ['col2', 'key2']
+    assert db.read_tbl('new2', None).columns.tolist() == [
+        'col2', 'col2_2', 'key2']
+
+    # ---------------------------------- Case 2 ---------------------------------- #
+
+    # Change table name (single statement)
+    au.rename_tbl('test3', 'new3', *params)
+    # Verify by reading the table using its new name and checking if it contain original columns
+    assert db.read_tbl('new3', None).columns.tolist() == ['col3', 'key3']
 
     # ---------------------------- Test rename column ---------------------------- #
 
-    # Change columns names
+    # ---------------------------------- Case 1 ---------------------------------- #
+
+    # Change columns names (multiple statements)
+    # Change 'col' to 'new_col' in table 'new1'
+    # Change 'col2' to 'new_col2' in table 'new2'
     au.rename_col(
         ('new1', 'new2'),
         ('col', 'col2'),
@@ -558,14 +577,42 @@ def test_database_interaction(redshift, create_commands):
     df1_new = db.read_tbl('new1', None)
     df2_new = db.read_tbl('new2', None)
     assert df1_new.columns.tolist() == ['new_col', 'key']
-    assert df2_new.columns.tolist() == ['new_col2', 'key2']
+    assert df2_new.columns.tolist() == ['new_col2', 'col2_2', 'key2']
 
+    # ---------------------------------- Case 2 ---------------------------------- #
+
+    # Change columns name (single statement)
+    # Change column 'col3' in table 'new3' to 'new_col3'
+    au.rename_col(
+        'new3',
+        'col3',
+        'new_col3',
+        *params
+    )
+    # Verify if column name has been changed
+    df3_new = db.read_tbl('new3', None)
+    assert df3_new.columns.tolist() == ['new_col3', 'key3']
+
+    # ---------------------------------- Case 3 ---------------------------------- #
+
+    # Change column names (recycle the first string to match those of the other two)
+    # Change columns 'col4' and 'col4_4' in table 'test4' to 'new_col4' and 'new_col4_4'
+    au.rename_col(
+        'test4',
+        ['col4', 'col4_4'],
+        ('new_col4', 'new_col4_4'),
+        *params
+    )
+    # Verify if column name has been changed
+    df4_new = db.read_tbl('test4', None)
+    assert df4_new.columns.tolist() == ['new_col4', 'new_col4_4', 'key4']
 
 # ---------------------------------------------------------------------------- #
 #                       Tests for S3 interaction function                      #
 # ---------------------------------------------------------------------------- #
 
 # ------------------------------ Fixtures for s3 ----------------------------- #
+
 
 @pytest.fixture(scope='function')
 def aws_credentials():

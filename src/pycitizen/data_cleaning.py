@@ -97,13 +97,21 @@ def clean_col_nms(df, inplace=False):
         df = df.copy()
 
     original_col_nms = df.columns.tolist()
-    # [^a-zA-Z0-9_] matches any character that is not a 'word character' (alphanumeric & underscore), which equivalent to \W
+    # Remove trailing and leading white spaces
+    new_col_nms = (col.strip() for col in original_col_nms)
+    # Replace white spaces with "_"
+    # \s+ matches 1 or more whitespace characters (spaces, tabs, line breaks)
+    new_col_nms = (sub(r'\s+', '_', col) for col in new_col_nms)
+    # [^a-zA-Z0-9_] matches any character that is not a 'word character' (alphanumeric & underscore), which is equivalent to \W
     new_col_nms = (sub('[^a-zA-Z0-9_]', '', col.lower())
-                   for col in original_col_nms)
-    # Remove leading characters until a letter
+                   for col in new_col_nms)
+    # Remove leading characters until a letter is matched
+    # ^ matches the beginning of the string
     # [^ ] is negated set, matching any character that is not in this set
     # + is a quantifier, matching the preceding element one or more times
-    new_col_nms = [sub('^[^a-zA-Z]+', '', col) for col in new_col_nms]
+    new_col_nms = (sub('^[^a-zA-Z]+', '', col) for col in new_col_nms)
+    # Remove trailing characters until a letter is matched
+    new_col_nms = [sub('[^a-zA-Z]+$', '', col) for col in new_col_nms]
     # Assign new columns
     df.columns = new_col_nms
 
@@ -319,14 +327,14 @@ def correct_misspell(df, cols, mapping, inplace=False):
 
 def find_missing(df, axis=0):
     """
-    This is a helper function that identifies columns in a DataFrame
+    This is a helper function that identifies columns or rows in a DataFrame
     that contain missing values.
 
     Parameters
     ----------
     df : DataFrame
     axis : int, optional
-        Whether to return rows or columns containing missing values, by default 0 (columns).
+        Whether to identify rows or columns that contain missing values, by default 0 (columns).
 
     Returns
     -------

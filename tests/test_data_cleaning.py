@@ -52,7 +52,9 @@ def check_col_nms_test_df():
         # Special characters
         pd.DataFrame({'^3edf': (1, 2)}),
         pd.DataFrame({'price ($)': (1, 2)}),
-        pd.DataFrame({'percent%': (1, 2)})
+        pd.DataFrame({'percent%': (1, 2)}),
+        # Trailing and leading White spaces
+        pd.DataFrame({' trailing   leading    ': (1, 2)})
     )
 
 
@@ -81,12 +83,14 @@ class TestColumnNmsHelpers:
             dc.check_col_nms(check_col_nms_test_df[4])
         with pytest.raises(InvalidIdentifierError, match=escape("Columns ['percent%'] are invalid identifiers")):
             dc.check_col_nms(check_col_nms_test_df[5])
+        with pytest.raises(InvalidIdentifierError, match=escape("Columns [' trailing   leading    '] are invalid identifiers")):
+            dc.check_col_nms(check_col_nms_test_df[6])
 
     def test_clean_col_nms(self, check_col_nms_test_df):
         """
         Check that clean_col_nms() fixes invalid identifiers.
         """
-        # Digits '123col' are first replace with "_" and then "_" are removed until letter 'c' is matched
+        # Digits '123col' become 'col' since leading characters are moved until a letter is matched
         assert dc.clean_col_nms(
             check_col_nms_test_df[1]).columns.tolist() == ['col']
         # Digit and special character are removed from '^3edf'
@@ -97,6 +101,10 @@ class TestColumnNmsHelpers:
             check_col_nms_test_df[4]).columns.tolist() == ['price']
         assert dc.clean_col_nms(
             check_col_nms_test_df[5]).columns.tolist() == ['percent']
+        # Leading and trailing white spaces are removed first, then while spaces in between are replace with '_'
+        assert dc.clean_col_nms(
+            check_col_nms_test_df[6]).columns.tolist() == ['trailing_leading']
+
 
 # ---------------------------------------------------------------------------- #
 #                          Tests for freq_tbl function                         #

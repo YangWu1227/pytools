@@ -597,19 +597,19 @@ def copy_tables(table_names, paths, access_key, secret_key, db_name, host, port,
 
 def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_password):
     """
-    This function accepts three sequences of equal lengths, executing the `ALTER TABLE RENAME COLUMN` statements in the database. The arguments must sequences like a `list` or
-    `tuple`. Each element in the three sequences must match in order for the query to be executed successfully. For database connection
-    parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing
-    connection parameters. 
+    This function accepts strings or sequences of equal lengths, executing the `ALTER TABLE RENAME COLUMN` statements in the database. For batch executing multiple rename statements, 
+    the arguments must be sequences like a `list` or `tuple`. A special case is when a single string is supplied for the argument 'tbl_names', its length is automatically 
+    recycled to match those of the other two. Each element in the three sequences must match in order for the query to be executed successfully. For database connection parameters, you may store 
+    all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing connection parameters. 
 
     Parameters
     ----------
-    tbl_names : Sequence of str
-        A sequence containing table names.
-    old_nms : Sequence of str
-        A sequence containing original column names.
-    new_nms : Sequence of str
-        A sequence containing new column names.
+    tbl_names : Sequence of str or str
+        A sequence containing table names or a single str.
+    old_nms : Sequence of str or str
+        A sequence containing original column names or a single str.
+    new_nms : Sequence of str or str
+        A sequence containing new column names or a single str.
     db_name : str
         Database name.
     host : str
@@ -628,6 +628,14 @@ def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_passwo
     ValueError
         The sequences 'tbl_names', 'old_nms', and 'new_nms' must have equal lengths.
     """
+    # If all arguments are str, coerce to tuples
+    if (isinstance(tbl_names, str) and isinstance(old_nms, str) and isinstance(new_nms, str)):
+        tbl_names, old_nms, new_nms = (tbl_names,), (old_nms,), (new_nms,)
+
+    # If 'tbl_names' is a str, recycle its length
+    if (isinstance(tbl_names, str) and is_sequence(old_nms) and is_sequence(new_nms)):
+        tbl_names = (tbl_names,) * len(old_nms)
+
     # Check input
     if not (is_sequence(tbl_names) and is_sequence(old_nms) and is_sequence(new_nms)):
         raise TypeError(
@@ -671,17 +679,17 @@ def rename_col(tbl_names, old_nms, new_nms, db_name, host, port, user, db_passwo
 
 def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
     """
-    This function accepts two sequences of equal lengths, executing the `ALTER TABLE RENAME TO` statements in the database. The arguments must be sequences like a `list` or
-    `tuple`. Each element in the two sequences must match in order for the query to be executed successfully. For database connection
+    This function accepts strings or sequences of equal lengths, executing the `ALTER TABLE RENAME TO` statements in the database. For batch executeing multiple rename statements, 
+    the arguments must be sequences like a `list` or `tuple`. Each element in the two sequences must match in order for the query to be executed successfully. For database connection
     parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing
     connection parameters. 
 
     Parameters
     ----------
-    old_nms : Sequence of str
-        A sequence containing original table names.
-    new_nms : Sequence of str
-        A sequence containing new table names.
+    old_nms : Sequence of str or str
+        A sequence containing original table names or a single str.
+    new_nms : Sequence of str or str
+        A sequence containing new table names or a single str.
     db_name : str
         Database name.
     host : str
@@ -700,6 +708,10 @@ def rename_tbl(old_nms, new_nms, db_name, host, port, user, db_password):
     ValueError
         The sequences 'old_nms' and 'new_nms' must have equal lengths.
     """
+    # If all arguments are str, coerce to tuples
+    if (isinstance(old_nms, str) and isinstance(new_nms, str)):
+        old_nms, new_nms = (old_nms,), (new_nms,)
+
     # Check input
     if not (is_sequence(old_nms) and is_sequence(new_nms)):
         raise TypeError(

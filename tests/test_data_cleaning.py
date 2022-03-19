@@ -330,3 +330,58 @@ class TestMisspell:
         # Test branches
         type(dc.correct_misspell(df=test_data, cols=cols,
              mapping=mapping)) == type(pd.DataFrame())
+
+# ---------------------------------------------------------------------------- #
+#                        Tests for find_missing function                       #
+# ---------------------------------------------------------------------------- #
+
+
+class TestFindMissing:
+    """
+    Tests for the find_missing helper function.
+    """
+
+    # ------------------------ Tests for exceptions raised ----------------------- #
+
+    def test_find_missing_errors(self, test_data):
+        """
+        Tests that find_missing raises exceptions when 'df' and 'axis' are passed invalid inputs.
+        """
+
+        # Unique exceptions due to polymorphism, but mostly attribute errors
+        # Places where exceptions will arise are the isna() and any() methods
+        # If a series is supplied than the lambda function will error due to series.isna().any() returning only a single bool
+        with pytest.raises(AttributeError):
+            dc.find_missing((1, 2, 3), axis=0)
+        with pytest.raises(IndexError):
+            dc.find_missing(pd.Series((1, 2, 3)), axis=0)
+        with pytest.raises(AttributeError):
+            dc.find_missing({'dict': (1, 2, 3)}, axis=0)
+
+        # Errors for 'axis'
+        # Usually type errors with message--- 'The argument 'axis' must be an integer'
+        # Value error if supplied anything other than 0 or 1
+        with pytest.raises(TypeError):
+            dc.find_missing(test_data, axis={'3': 9})
+        with pytest.raises(ValueError):
+            dc.find_missing(test_data, axis=10)
+
+    # -------------------------- Tests for functionality ------------------------- #
+
+    def test_find_missing(self, test_data):
+        """
+        Test that find_missing returns expected results given inputs with branches.
+        """
+
+        # Return for rows
+        pd.testing.assert_series_equal(
+            left=dc.find_missing(test_data, axis=1),
+            right=pd.Series(data=(True,) * 5, index=(2, 5, 7, 8, 9))
+        )
+
+        # Return for columns
+        pd.testing.assert_series_equal(
+            left=dc.find_missing(test_data, axis=0),
+            right=pd.Series(
+                data=(True,) * 3, index=('likert_encode', 'str_encode', 'case_convert'))
+        )

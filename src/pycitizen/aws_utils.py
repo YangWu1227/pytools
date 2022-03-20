@@ -133,7 +133,7 @@ def create_statement(df: pd.DataFrame, tbl_name: str, primary_key: str) -> str:
     ColumnDtypeInferError
         The argument 'df' contains one or more columns that cannot be inferred. Currently, only columns with dtype `int`, `float`, `datetime64` or `object` columns can be inferred.
     """
-    if (not isinstance(df, pd.DataFrame)) or (not isinstance(tbl_name, str)) or (not isinstance(primary_key, str)):
+    if not (isinstance(df, pd.DataFrame) and isinstance(tbl_name, str) and isinstance(primary_key, str)):
         raise TypeError(
             "'df' must be a data frame and 'tbl_name' and 'primary_key' must be string objects")
 

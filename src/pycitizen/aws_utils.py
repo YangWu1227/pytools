@@ -493,7 +493,7 @@ class MyRedShift(object):
         except (Exception, py.DatabaseError, py.DataError, py.OperationalError) as error:
             print(error)
 
-        # ------------ Function to copy tables from S3 bucket to database ------------ #
+    # ------------ Function to copy tables from S3 bucket to database ------------ #
 
     def copy_tables(self,
                     table_names: Union[List[str], Tuple[str]],
@@ -564,94 +564,73 @@ class MyRedShift(object):
         except (Exception, py.DatabaseError, py.DataError, NoCredentialsError) as error:
             print(error)
 
-# ------------- Function to rename table columns in the database ------------- #
+    # ------------- Function to rename table columns in the database ------------- #
 
+    def rename_col(self,
+                   tbl_names: Union[List[str], Tuple[str], str],
+                   old_nms: Union[List[str], Tuple[str], str],
+                   new_nms: Union[List[str], Tuple[str], str]) -> None:
+        """
+        This function accepts strings or sequences of equal lengths, executing the `ALTER TABLE RENAME COLUMN` statements in the database. For batch executing multiple rename statements, 
+        the arguments must be sequences like a `list` or `tuple`. A special case is when a single string is supplied for the argument 'tbl_names' and only this argument, its length is automatically 
+        recycled to match those of the other two. Each element in the three sequences must match in order for the query to be executed successfully. For database connection parameters, you may store 
+        all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing connection parameters. 
 
-def rename_col(tbl_names: Union[List[str], Tuple[str], str],
-               old_nms: Union[List[str], Tuple[str], str],
-               new_nms: Union[List[str], Tuple[str], str],
-               db_name: str,
-               host: str,
-               port: str,
-               user: str,
-               db_password: str) -> None:
-    """
-    This function accepts strings or sequences of equal lengths, executing the `ALTER TABLE RENAME COLUMN` statements in the database. For batch executing multiple rename statements, 
-    the arguments must be sequences like a `list` or `tuple`. A special case is when a single string is supplied for the argument 'tbl_names' and only this argument, its length is automatically 
-    recycled to match those of the other two. Each element in the three sequences must match in order for the query to be executed successfully. For database connection parameters, you may store 
-    all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing connection parameters. 
+        Parameters
+        ----------
+        tbl_names : str or Sequence of str 
+            A sequence containing table names or a single str.
+        old_nms : str or Sequence of str
+            A sequence containing original column names or a single str.
+        new_nms : str or Sequence of str
+            A sequence containing new column names or a single str.
 
-    Parameters
-    ----------
-    tbl_names : str or Sequence of str 
-        A sequence containing table names or a single str.
-    old_nms : str or Sequence of str
-        A sequence containing original column names or a single str.
-    new_nms : str or Sequence of str
-        A sequence containing new column names or a single str.
-    db_name : str
-        Database name.
-    host : str
-        Database host address.
-    port : str
-        Connection port number.
-    user : str
-        User name used to authenticate.
-    db_password : str
-        Database password.
+        Raises
+        ------
+        TypeError
+            The arguments 'tbl_names', 'old_nms', and 'new_nms' must be registered as Sequences.
+        ValueError
+            The sequences 'tbl_names', 'old_nms', and 'new_nms' must have equal lengths.
+        """
+        # If all arguments are str, coerce to tuples
+        if (isinstance(tbl_names, str) and isinstance(old_nms, str) and isinstance(new_nms, str)):
+            tbl_names, old_nms, new_nms = (tbl_names,), (old_nms,), (new_nms,)
 
-    Raises
-    ------
-    TypeError
-        The arguments 'tbl_names', 'old_nms', and 'new_nms' must be registered as Sequences.
-    ValueError
-        The sequences 'tbl_names', 'old_nms', and 'new_nms' must have equal lengths.
-    """
-    # If all arguments are str, coerce to tuples
-    if (isinstance(tbl_names, str) and isinstance(old_nms, str) and isinstance(new_nms, str)):
-        tbl_names, old_nms, new_nms = (tbl_names,), (old_nms,), (new_nms,)
+        # If 'tbl_names' is a str, recycle its length
+        if (isinstance(tbl_names, str) and is_sequence(old_nms) and is_sequence(new_nms)):
+            tbl_names = (tbl_names,) * len(old_nms)
 
-    # If 'tbl_names' is a str, recycle its length
-    if (isinstance(tbl_names, str) and is_sequence(old_nms) and is_sequence(new_nms)):
-        tbl_names = (tbl_names,) * len(old_nms)
+        # Check input
+        if not (is_sequence(tbl_names) and is_sequence(old_nms) and is_sequence(new_nms)):
+            raise TypeError(
+                "'tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples")
+        if not len(tbl_names) == len(old_nms) == len(new_nms):
+            raise ValueError(
+                "'tbl_names', 'old_nms', and 'new_nms' must have equal lengths")
 
-    # Check input
-    if not (is_sequence(tbl_names) and is_sequence(old_nms) and is_sequence(new_nms)):
-        raise TypeError(
-            "'tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples")
-    if not len(tbl_names) == len(old_nms) == len(new_nms):
-        raise ValueError(
-            "'tbl_names', 'old_nms', and 'new_nms' must have equal lengths")
-
-    try:
-        # Connection object
-        conn = py.connect(
-            dbname=db_name,
-            host=host,
-            port=port,
-            user=user,
-            password=db_password
-        )
-        # Cursor object
-        cur = conn.cursor()
-        # Copy tables iteratively
-        for tbl_name, old_nm, new_nm in zip(tbl_names, old_nms, new_nms):
-            cur.execute(
-                f'''
-                ALTER TABLE {tbl_name}
-                RENAME COLUMN {old_nm} TO {new_nm}
-                '''
-            )
-        # Close cursor
-        cur.close()
-        # Commit changes
-        conn.commit()
-        # Close
-        if conn is not None:
-            conn.close()
-    # Catch InvalidColumnReference or UndefinedTable with py.ProgrammingError class
-    except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
-        print(error)
+        try:
+            # Connection object
+            conn = self.connect()
+            # Cursor object
+            cur = conn.cursor()
+            # Copy tables iteratively
+            for tbl_name, old_nm, new_nm in zip(tbl_names, old_nms, new_nms):
+                cur.execute(
+                    f'''
+                    ALTER TABLE {tbl_name}
+                    RENAME COLUMN {old_nm} TO {new_nm}
+                    '''
+                )
+            # Close cursor
+            cur.close()
+            # Commit changes
+            conn.commit()
+            # Close
+            if conn is not None:
+                conn.close()
+        # Catch InvalidColumnReference or UndefinedTable with py.ProgrammingError class
+        except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
+            print(error)
 
  # ----------------- Function to rename tables in the database ---------------- #
 

@@ -150,47 +150,6 @@ class TestInputValidation:
         with pytest.raises(ValueError, match="'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths"):
             au.create_statements(df_seq, tbl_names, primary_keys)
 
-    # --------------------------- Tests for rename_col --------------------------- #
-
-    @pytest.mark.parametrize(
-        "tbl_names, old_nms, new_nms",
-        [
-            # Case 1 (set tbl_name)
-            (
-                {"tbl_name"},
-                ('old1', 'old2'),
-                ('new1', 'new2')
-            ),
-            # Case 2 (tbl_names is a sequence while the other two are strings)
-            (
-                ("tbl_name",),
-                "old",
-                "new"
-            )
-        ],
-        scope='function'
-    )
-    def test_rename_col_type_error(self, tbl_names, old_nms, new_nms):
-        """
-        Exception raised that 'tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples.
-        """
-        with pytest.raises(TypeError, match="'tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples"):
-            au.rename_col(tbl_names, old_nms, new_nms, db_name="name", host="host",
-                          port="port", user="user", db_password="pass")
-
-    @pytest.mark.parametrize(
-        "tbl_names, old_nms, new_nms",
-        [(('tbl1', 'tbl2'), ('old1', 'old2'), ['new'] * 3)],
-        scope='function'
-    )
-    def test_rename_col_len_error(self, tbl_names, old_nms, new_nms):
-        """
-        Exception raised that 'tbl_names', 'old_nms', and 'new_nms' must have equal lengths.
-        """
-        with pytest.raises(ValueError, match="'tbl_names', 'old_nms', and 'new_nms' must have equal lengths"):
-            au.rename_col(tbl_names, old_nms, new_nms, db_name="name", host="host",
-                          port="port", user="user", db_password="pass")
-
     # --------------------------- Tests for rename_tbl --------------------------- #
 
     @pytest.mark.parametrize(
@@ -471,6 +430,47 @@ def test_MyRedShift(redshift):
         with pytest.raises(ValueError, match="'table_names' and 'paths' must have equal lengths"):
             db.copy_tables(tbl_names, paths)
 
+    # ------------------------- Test rename_col() method ------------------------- #
+
+    # -------------------------------- Exceptions -------------------------------- #
+
+    @pytest.mark.parametrize(
+        "tbl_names, old_nms, new_nms",
+        [
+            # Case 1 (set tbl_name)
+            (
+                {"tbl_name"},
+                ('old1', 'old2'),
+                ('new1', 'new2')
+            ),
+            # Case 2 (tbl_names is a sequence while the other two are strings)
+            (
+                ("tbl_name",),
+                "old",
+                "new"
+            )
+        ],
+        scope='function'
+    )
+    def test_rename_col_type_error(self, tbl_names, old_nms, new_nms):
+        """
+        Exception raised that 'tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples.
+        """
+        with pytest.raises(TypeError, match="'tbl_names', 'old_nms', and 'new_nms' must be sequences like lists or tuples"):
+            db.rename_col(tbl_names, old_nms, new_nms)
+
+    @pytest.mark.parametrize(
+        "tbl_names, old_nms, new_nms",
+        [(('tbl1', 'tbl2'), ('old1', 'old2'), ['new'] * 3)],
+        scope='function'
+    )
+    def test_rename_col_len_error(self, tbl_names, old_nms, new_nms):
+        """
+        Exception raised that 'tbl_names', 'old_nms', and 'new_nms' must have equal lengths.
+        """
+        with pytest.raises(ValueError, match="'tbl_names', 'old_nms', and 'new_nms' must have equal lengths"):
+            db.rename_col(tbl_names, old_nms, new_nms)
+
 # ---------------------------------------------------------------------------- #
 #                         Tests for the AwsCreds class                         #
 # ---------------------------------------------------------------------------- #
@@ -577,11 +577,10 @@ def test_database_interaction(redshift, create_commands):
     # Change columns names (multiple statements)
     # Change 'col' to 'new_col' in table 'new1'
     # Change 'col2' to 'new_col2' in table 'new2'
-    au.rename_col(
+    db.rename_col(
         ('new1', 'new2'),
         ('col', 'col2'),
-        ('new_col', 'new_col2'),
-        *params
+        ('new_col', 'new_col2')
     )
     # Verify if column names have been changed
     df1_new = db.read_tbl('new1', None)
@@ -593,11 +592,10 @@ def test_database_interaction(redshift, create_commands):
 
     # Change columns name (single statement)
     # Change column 'col3' in table 'new3' to 'new_col3'
-    au.rename_col(
+    db.rename_col(
         'new3',
         'col3',
-        'new_col3',
-        *params
+        'new_col3'
     )
     # Verify if column name has been changed
     df3_new = db.read_tbl('new3', None)
@@ -607,11 +605,10 @@ def test_database_interaction(redshift, create_commands):
 
     # Change column names (recycle the first string to match those of the other two)
     # Change columns 'col4' and 'col4_4' in table 'test4' to 'new_col4' and 'new_col4_4'
-    au.rename_col(
+    db.rename_col(
         'test4',
         ['col4', 'col4_4'],
-        ('new_col4', 'new_col4_4'),
-        *params
+        ('new_col4', 'new_col4_4')
     )
     # Verify if column name has been changed
     df4_new = db.read_tbl('test4', None)

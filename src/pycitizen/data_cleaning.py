@@ -22,7 +22,7 @@ from typing import List, Dict, Tuple, Union, Optional, NamedTuple
 # ------------------------------- Intra-package ------------------------------ #
 
 from pycitizen.exceptions import ColumnDtypeInferError, ColumnNameKeyWordError, ColumnNameStartWithDigitError, InvalidIdentifierError, InvalidColumnDtypeError
-from pycitizen.utils import is_sequence, is_sequence_str
+from pycitizen.utils import is_sequence, is_sequence_str, is_string
 
 # ---------------------------------------------------------------------------- #
 #                               Cleaning helpers                               #
@@ -213,19 +213,16 @@ def case_convert(df: pd.DataFrame,
 
     # If user does not specify columns, default to using all columns that are inferred as 'string'
     if cols == None:
-        bool_is_str = [pd.api.types.infer_dtype(
-            value=df[col], skipna=True) == 'string' for col in df.columns.tolist()]
+        bool_is_str = [is_string(df[col]) for col in df.columns.tolist()]
         cols = list(compress(df.columns.tolist(), bool_is_str))
     else:
         # If cols is a single string, then use the string to select column from df directly
         if isinstance(cols, str):
-            bool_is_str = [pd.api.types.infer_dtype(
-                value=df[cols], skipna=True) == 'string']
+            bool_is_str = [is_string(df[cols])]
         else:
-            # If cols a sequence of strings, then apply list comprehension
-            bool_is_str = [pd.api.types.infer_dtype(
-                value=df[col], skipna=True) == 'string' for col in cols]
-        # If user supplies columns, check input column data types
+            # If cols is a sequence of strings, then apply list comprehension
+            bool_is_str = [is_string(df[col]) for col in cols]
+        # Take the 'bool_is_str' list from either one of the two branches above, check input column data types
         if not all(bool_is_str):
             raise InvalidColumnDtypeError(col_nms=list(
                 compress(cols, [not element for element in bool_is_str])), dtype='string')
@@ -305,12 +302,10 @@ def correct_misspell(df, cols, mapping, inplace=False) -> Union[pd.DataFrame, No
 
     # If cols is a single string, then use the string to select column from df directly
     if isinstance(cols, str):
-        bool_is_str = [pd.api.types.infer_dtype(
-            value=df[cols], skipna=True) == 'string']
+        bool_is_str = [is_string(df[cols])]
     else:
         # If a sequence of strings, then apply list comprehension
-        bool_is_str = [pd.api.types.infer_dtype(
-            value=df[col], skipna=True) == 'string' for col in cols]
+        bool_is_str = [is_string(df[col]) for col in cols]
 
     # Check input column data types
     if not all(bool_is_str):

@@ -19,7 +19,7 @@ from typing import List, Dict, Tuple, Union, Optional
 # ------------------------------- Intra-package ------------------------------ #
 
 from pycitizen.exceptions import ColumnDtypeInferError
-from pycitizen.predicates import is_sequence
+from pycitizen.utils import is_sequence
 
 # ---------------------------------------------------------------------------- #
 #                             SQL commands creation                            #

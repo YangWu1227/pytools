@@ -22,7 +22,7 @@ from typing import List, Dict, Tuple, Union, Optional, NamedTuple
 # ------------------------------- Intra-package ------------------------------ #
 
 from pycitizen.exceptions import ColumnDtypeInferError, ColumnNameKeyWordError, ColumnNameStartWithDigitError, InvalidIdentifierError, InvalidColumnDtypeError
-from pycitizen.predicates import is_sequence, is_sequence_str
+from pycitizen.utils import is_sequence, is_sequence_str
 
 # ---------------------------------------------------------------------------- #
 #                               Cleaning helpers                               #

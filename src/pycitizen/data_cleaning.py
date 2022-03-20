@@ -359,76 +359,86 @@ def find_missing(df: pd.DataFrame, axis: Optional[int] = 0) -> pd.Series:
         raise ValueError("'axis' must either be 1 (rows) or 0 (columns)")
 
 # ---------------------------------------------------------------------------- #
+#       Persistent storage and standard operating procedure for cleaning       #
+# ---------------------------------------------------------------------------- #
+
+
+class EncodeMap(object):
+    def __init__(self, mapping: List[dict], data: Optional[pd.DataFrame] = None) -> None:
+        self.data = data
+        self.mapping = mapping
+
+    def to_json():
+        return None
+
+    def to_excel():
+        return None
+
+    def from_json():
+        return None
+
+# ---------------------------------------------------------------------------- #
 #                              Encoding functions                              #
 # ---------------------------------------------------------------------------- #
 
 # ----------------------- Function for ordinal encoding ---------------------- #
 
 
-def likert_encode(df, mapping, return_class=False):
+def likert_encode(df: pd.DataFrame, mapping: List[dict], data_dict: Optional[bool] = True, inplace: Optional[bool] = False):
     """
-    This function transforms specified columns using likert scale. Note that
-    this function is defined to handle cases where some columns contain missing
-    values. Use the helper function contain_null() to determine whether columns
-    that are to be transformed contain any missing values.
-    Note: The results of this transformation may be inaccurate if
-    the columns contain misspellings and/or case inconsistencies. Use
-    freq_tbl() to identify those issues. Then, use case_convert() and
-    correct_misspell() to address those issues before proceeding with
-    the transformation.
+    This function transforms specified columns using the likert scale, in which an integer vector is used to represent the classes of the categories in the columns. 
+    The results of this transformation will be inaccurate if the columns contain misspellings or case inconsistencies in the categories. The `freq_tbl()` 
+    helper may be helpful for identifying the presence of such issues. Then, `case_convert()` and `correct_misspell()` may be useful in addressing those issues.
+    All these cleaning helpers are a part of the recommended preprocessing steps, which precede this transformation.
 
     Parameters
     ----------
-    df : Dataframe
-    mapping : A list of dictionaries: 
-        - This must be a mapping of categories to labels for the encoding.
-        - The dict contains a list of keys 'col' and values 'mapping'.
-        - The value of each 'col' should be a feature name.
-        - The value of each 'mapping' should be a dictionary of 'original_label' to 'encoded_label'.
-        Example mapping: [
-            {'col': 'col_1', 'mapping': {'a': 1, 'b': 2}},
-            {'col': 'col_2', 'mapping': {'x': 1, 'y': 2}}
+    df : DataFrame
+    mapping : list of dict
+        This must be a mapping of categories to labels for the encoding.
+        The dict contains a list of keys 'col' and values 'mapping'.
+        The value of each 'col' should be a column name.
+        The value of each 'mapping' should be a dictionary of 'original_label' to 'encoded_label'.
+        example mapping: [
+            {'col': 'col1', 'mapping': {'a': 1, 'b': 2}},
+            {'col': 'col2', 'mapping': {'x': 1, 'y': 2}}
         ]
-    return_class : bool, optional
-        Whether to return an object of class EcodedObject, which then may be serialized, by default False
+    data_dict : bool, optional
+        Whether to write the list of mappings as an excel file, by default True.
+    inplace : bool, optional
+        Whether to return a new DataFrame, by default False.
 
     Returns
     -------
-    _type_
-        _description_
+    DataFrame
+        A DataFrame with transformed columns or None if inplace=True.
     """
-    # Create a copy
-    df = df.copy()
+    # Create a copy if inplace=False
+    if (not inplace):
+        df = df.copy()
 
-    # Instantiate encoder
-    encoder = ce_OrdinalEncoder(
-        return_df=True,
-        mapping=mapping,
-        handle_unknown='return_nan'
-    )
-    # Fit and Transform
-    transformed_df = encoder.fit_transform(X=df)
-    # Select columns with float64 dtype
-    float_cols = transformed_df.select_dtypes(include=np.float64)
-    # Cast float64 to int64
-    transformed_df[float_cols.columns] = float_cols.astype("Int64")
-    # Map pd.NA to None
-    transformed_df.replace(to_replace={pd.NA: None}, inplace=True)
+    for col_mapping_pair in mapping:
+        # May switch to get() to not raise an error if the keys do not exist
+        col = col_mapping_pair['col']
+        col_mapping = col_mapping_pair['mapping']
 
-    # Create a class
-    class EncodedObject:
-        def __init__(self, df, mapping):
-            self.df = df
-            self.mapping = mapping
-    # Declare global variable
-    global encoded_object
-    # Instantiate an object of class EcodedObject
-    encoded_object = EncodedObject(transformed_df, mapping)
+        # If None exists, then convert it to np.NaN in prepartion for 'na_action' in map()
+        df[col] = pd.Series(
+            [obs if obs is not None else np.NaN for obs in df[col]], index=df[col].index)
 
-    if return_class:
-        return encoded_object
+        # Use 'na_action' to not pass np.NaN to the mapping correspondence
+        df[col] = df[col].map(col_mapping, na_action='ignore')
+
+        # Integer column with missing values is cast to floating-point dtype
+        # Try converting to nullable integer array if possible
+        # Use errors='ignore' to return original object on error
+        df[col] = df[col].astype('Int64', errors='ignore')
+
+    # Return copy
+    if (not inplace):
+        return df
     else:
-        return encoded_object.df
+        return None
 
 # ------------------------- One-hot or dummy encoding ------------------------ #
 

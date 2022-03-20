@@ -495,7 +495,8 @@ class MyRedShift(object):
 
         # ------------ Function to copy tables from S3 bucket to database ------------ #
 
-    def copy_tables(table_names: Union[List[str], Tuple[str]],
+    def copy_tables(self,
+                    table_names: Union[List[str], Tuple[str]],
                     paths: Union[List[str], Tuple[str]],
                     access_key: str,
                     secret_key: str) -> None:

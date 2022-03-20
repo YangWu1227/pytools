@@ -124,7 +124,7 @@ def create_statement(df: pd.DataFrame, tbl_name: str, primary_key: str) -> str:
     Returns
     -------
     str
-        A Redshift CREATE TABLE statement to be passed to create_tables().
+        A Redshift CREATE TABLE statement to be passed to create_tbl().
 
     Raises
     ------
@@ -209,7 +209,7 @@ def create_statements(df_seq: Union[List[pd.DataFrame], Tuple[pd.DataFrame]],
     """
     This function is a vectorized version of `create_statement()`, which takes a sequence of
     data frames, a sequence of table names, and a sequence of primary keys, returning a tuple of
-    CREATE TABLE statements. The output of this function can then be passed to `create_tables()`,
+    CREATE TABLE statements. The output of this function can then be passed to `create_tbl()`,
     which creates shell tables in the database with column data types specified.
 
     Parameters
@@ -223,7 +223,7 @@ def create_statements(df_seq: Union[List[pd.DataFrame], Tuple[pd.DataFrame]],
     Returns
     -------
     tuple of str
-        A tuple of Redshift CREATE TABLE statements to be passed to `create_tables()`.
+        A tuple of Redshift CREATE TABLE statements to be passed to `create_tbl()`.
 
     Raises
     ------
@@ -450,7 +450,7 @@ class MyRedShift(object):
 
     # ------------------- Function to create tables in RedShift ------------------ #
 
-    def create_tables(self, commands: Tuple[str]) -> None:
+    def create_tbl(self, commands: Tuple[str]) -> None:
         """
         When passed a tuple of SQL commands, this function executes the commands and commits the
         changes to Redshift. For single table creation, use `(command, )` to pass a single-element
@@ -495,11 +495,11 @@ class MyRedShift(object):
 
     # ------------ Function to copy tables from S3 bucket to database ------------ #
 
-    def copy_tables(self,
-                    table_names: Union[List[str], Tuple[str]],
-                    paths: Union[List[str], Tuple[str]],
-                    access_key: str,
-                    secret_key: str) -> None:
+    def copy_tbl(self,
+                 table_names: Union[List[str], Tuple[str]],
+                 paths: Union[List[str], Tuple[str]],
+                 access_key: str,
+                 secret_key: str) -> None:
         """
         This function accepts a sequence of table names and a sequence of data-source paths, and it loads data into a table in
         the database hosted on Amazon Redshift. Currently, the only implemented data-source is AWS S3. For aws credentials parameters, 

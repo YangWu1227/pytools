@@ -325,7 +325,7 @@ def test_MyRedShift(redshift):
         })
     )
 
-    # ------------------------ Test create_tables() method ----------------------- #
+    # ------------------------ Test create_tbl() method -------------------------- #
 
     # -------------------------------- Exceptions -------------------------------- #
 
@@ -340,25 +340,25 @@ def test_MyRedShift(redshift):
         ],
         scope='function'
     )
-    def test_create_tables_type_error(self, commands):
+    def test_create_tbl_type_error(self, commands):
         """
         Exception raised that 'commands' must be a tuple. This may be changed to allow more flexibility in the future.
         """
         with pytest.raises(TypeError, match="'commands' must be a tuple"):
-            db.create_tables(commands)
+            db.create_tbl(commands)
 
     @pytest.mark.parametrize(
         "commands", [("command1", b'commands2')],
         scope='function'
     )
-    def test_create_tables_element_error(self, commands):
+    def test_create_tbl_element_error(self, commands):
         """
         Exception raised that all elements in 'commands' must be strings.
         """
         with pytest.raises(TypeError, match="All CREATE TABLE statements in 'commands' must be string objects"):
-            db.create_tables(commands)
+            db.create_tbl(commands)
 
-    # ------------------------- Test copy_tables() method ------------------------ #
+    # -------------------------- Test copy_tbl() method -------------------------- #
 
     # -------------------------------- Exceptions -------------------------------- #
 
@@ -374,23 +374,23 @@ def test_MyRedShift(redshift):
         ],
         scope='function'
     )
-    def test_copy_tables_type_error(self, tbl_names, paths):
+    def test_copy_tbl_type_error(self, tbl_names, paths):
         """
         Exception raised that 'table_names' and 'paths' must be sequences like lists or tuples.
         """
         with pytest.raises(TypeError, match="'table_names' and 'paths' must be sequences like lists or tuples"):
-            db.copy_tables(tbl_names, paths)
+            db.copy_tbl(tbl_names, paths)
 
     @pytest.mark.parametrize(
         "tbl_names, paths", [(['tbl1', 'tbl2'], ['path'] * 3)],
         scope='function'
     )
-    def test_copy_tables_len_error(self, tbl_names, paths):
+    def test_copy_tbl_len_error(self, tbl_names, paths):
         """
         Exception raised that 'table_names' and 'paths' must have equal lengths.
         """
         with pytest.raises(ValueError, match="'table_names' and 'paths' must have equal lengths"):
-            db.copy_tables(tbl_names, paths)
+            db.copy_tbl(tbl_names, paths)
 
     # ------------------------- Test rename_col() method ------------------------- #
 
@@ -511,7 +511,7 @@ class TestAwsCreds:
 @pytest.fixture(scope='function')
 def create_commands():
     """
-    Fixture for create_tables() function.
+    Fixture for create_tbl() function.
     """
     return (
         'CREATE TABLE test1 (col INTEGER, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))',
@@ -525,7 +525,7 @@ def create_commands():
 
 def test_database_interaction(redshift, create_commands):
     """
-    Tests for create_tables(), rename_tbl(), and rename_col(). The copy_tables() function
+    Tests for create_tbl(), rename_tbl(), and rename_col(). The copy_tbl() function
     is currently tested only manually outside of this automated testing framework.
     """
     # Database connection parameters
@@ -542,7 +542,7 @@ def test_database_interaction(redshift, create_commands):
 
     # ----------------------------- Test create table ---------------------------- #
 
-    db.create_tables(
+    db.create_tbl(
         create_commands
     )
     # Retrieve created tables

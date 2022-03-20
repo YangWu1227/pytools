@@ -496,7 +496,7 @@ class MyRedShift(object):
     # ------------ Function to copy tables from S3 bucket to database ------------ #
 
     def copy_tbl(self,
-                 table_names: Union[List[str], Tuple[str]],
+                 tbl_names: Union[List[str], Tuple[str]],
                  paths: Union[List[str], Tuple[str]],
                  access_key: str,
                  secret_key: str) -> None:
@@ -508,7 +508,7 @@ class MyRedShift(object):
 
         Parameters
         ----------
-        table_names : Sequence of str
+        tbl_names : Sequence of str
             The name of the target table for the COPY command. The table must already
             exist in the database. The table can be temporary or persistent. The COPY command appends the
             new input data to any existing rows in the table.
@@ -523,17 +523,17 @@ class MyRedShift(object):
         Raises
         ------
         TypeError
-            The arguments 'table_names' and 'paths' must be registered as Sequences.
+            The arguments 'tbl_names' and 'paths' must be registered as Sequences.
         ValueError
-            The sequences 'table_names' and 'paths' must have equal lengths.
+            The sequences 'tbl_names' and 'paths' must have equal lengths.
         """
         # Check input
-        if not (is_sequence(table_names) and is_sequence(paths)):
+        if not (is_sequence(tbl_names) and is_sequence(paths)):
             raise TypeError(
-                "'table_names' and 'paths' must be sequences like lists or tuples")
-        if not len(table_names) == len(paths):
+                "'tbl_names' and 'paths' must be sequences like lists or tuples")
+        if not len(tbl_names) == len(paths):
             raise ValueError(
-                "'table_names' and 'paths' must have equal lengths")
+                "'tbl_names' and 'paths' must have equal lengths")
 
         try:
             # Connection object
@@ -541,7 +541,7 @@ class MyRedShift(object):
             # Cursor object
             cur = conn.cursor()
             # Copy tables iteratively
-            for table_name, path in zip(table_names, paths):
+            for table_name, path in zip(tbl_names, paths):
                 cur.execute(
                     f'''
                         COPY {table_name}

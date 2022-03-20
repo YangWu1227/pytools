@@ -376,9 +376,9 @@ def test_MyRedShift(redshift):
     )
     def test_copy_tbl_type_error(self, tbl_names, paths):
         """
-        Exception raised that 'table_names' and 'paths' must be sequences like lists or tuples.
+        Exception raised that 'tbl_names' and 'paths' must be sequences like lists or tuples.
         """
-        with pytest.raises(TypeError, match="'table_names' and 'paths' must be sequences like lists or tuples"):
+        with pytest.raises(TypeError, match="'tbl_names' and 'paths' must be sequences like lists or tuples"):
             db.copy_tbl(tbl_names, paths)
 
     @pytest.mark.parametrize(
@@ -387,9 +387,9 @@ def test_MyRedShift(redshift):
     )
     def test_copy_tbl_len_error(self, tbl_names, paths):
         """
-        Exception raised that 'table_names' and 'paths' must have equal lengths.
+        Exception raised that 'tbl_names' and 'paths' must have equal lengths.
         """
-        with pytest.raises(ValueError, match="'table_names' and 'paths' must have equal lengths"):
+        with pytest.raises(ValueError, match="'tbl_names' and 'paths' must have equal lengths"):
             db.copy_tbl(tbl_names, paths)
 
     # ------------------------- Test rename_col() method ------------------------- #

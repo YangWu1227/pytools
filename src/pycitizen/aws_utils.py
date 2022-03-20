@@ -448,68 +448,49 @@ class MyRedShift(object):
             )
             return pd.concat(list(gen_obj))
 
-# ------------------- Function to create tables in RedShift ------------------ #
+    def create_tables(self, commands: Tuple[str]) -> None:
+        """
+        When passed a tuple of SQL commands, this function executes the commands and commits the
+        changes to Redshift. For single table creation, use `(command, )` to pass a single-element
+        tuple.
 
+        Parameters
+        ----------
+        commands : tuple of str
+            A tuple of SQL commands.
 
-def create_tables(commands: Tuple[str], db_name: str, host: str, port: str, user: str, db_password: str) -> None:
-    """
-    When passed a tuple of SQL commands, this function executes the commands and commits the
-    changes to Redshift. For single table creation, use `(command, )` to pass a single-element
-    tuple. For database connection parameters, you may store all parameters in a sequence container 
-    and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing connection parameters.
+        Raises
+        ------
+        TypeError
+            The argument 'commands' must be a tuple.
+        TypeError
+            All SQL commands must be string objects.
+        """
+        # Check inputs
+        if not isinstance(commands, tuple):
+            raise TypeError("'commands' must be a tuple")
+        if not all((isinstance(statement, str) for statement in commands)):
+            raise TypeError(
+                "All CREATE TABLE statements in 'commands' must be string objects")
 
-    Parameters
-    ----------
-    commands : tuple of str
-        A tuple of SQL commands.
-    db_name : str
-        Database name.
-    host : str
-        Database host address.
-    port : str
-        Connection port number.
-    user : str
-        User name used to authenticate.
-    db_password : str
-        Database password.
+        try:
+            # Connection object
+            conn = self.connect()
+            # Cursor object
+            cur = conn.cursor()
+            # Create tables iteratively
+            for command in commands:
+                cur.execute(command)
+            # Close cursor
+            cur.close()
+            # Commit changes
+            conn.commit()
+            # Close
+            if conn is not None:
+                conn.close()
+        except (Exception, py.DatabaseError, py.DataError, py.OperationalError) as error:
+            print(error)
 
-    Raises
-    ------
-    TypeError
-        The argument 'commands' must be a tuple.
-    TypeError
-        All SQL commands must be string objects.
-    """
-    # Check inputs
-    if not isinstance(commands, tuple):
-        raise TypeError("'commands' must be a tuple")
-    if not all((isinstance(statement, str) for statement in commands)):
-        raise TypeError(
-            "All CREATE TABLE statements in 'commands' must be string objects")
-
-    try:
-        # Connection object
-        conn = py.connect(
-            dbname=db_name,
-            host=host,
-            port=port,
-            user=user,
-            password=db_password
-        )
-        # Cursor object
-        cur = conn.cursor()
-        # Create tables iteratively
-        for command in commands:
-            cur.execute(command)
-        # Close cursor
-        cur.close()
-        # Commit changes
-        conn.commit()
-        # Close
-        if conn is not None:
-            conn.close()
-    except (Exception, py.DatabaseError, py.DataError, py.OperationalError) as error:
-        print(error)
 
 # ------------ Function to copy tables from S3 bucket to database ------------ #
 

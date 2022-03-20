@@ -150,39 +150,6 @@ class TestInputValidation:
         with pytest.raises(ValueError, match="'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths"):
             au.create_statements(df_seq, tbl_names, primary_keys)
 
-    # -------------------------- Tests for create_tables ------------------------- #
-
-    @pytest.mark.parametrize(
-        "commands",
-        [
-            # Case 1
-            ["command1", "command2"],
-            # Case 2
-            "single_statement"
-
-        ],
-        scope='function'
-    )
-    def test_create_tables_type_error(self, commands):
-        """
-        Exception raised that 'commands' must be a tuple. This may be changed to allow more flexibility in the future.
-        """
-        with pytest.raises(TypeError, match="'commands' must be a tuple"):
-            au.create_tables(commands, db_name="name", host="host",
-                             port="port", user="user", db_password="pass")
-
-    @pytest.mark.parametrize(
-        "commands", [("command1", b'commands2')],
-        scope='function'
-    )
-    def test_create_tables_element_error(self, commands):
-        """
-        Exception raised that all elements in 'commands' must be strings.
-        """
-        with pytest.raises(TypeError, match="All CREATE TABLE statements in 'commands' must be string objects"):
-            au.create_tables(commands, db_name="name", host="host",
-                             port="port", user="user", db_password="pass")
-
     # --------------------------- Tests for copy_tables -------------------------- #
 
     @pytest.mark.parametrize(
@@ -425,25 +392,30 @@ def test_MyRedShift(redshift):
     # Instantiate class
     db = au.MyRedShift(*params)
 
-    # Test that class constructor returns expected object
+    # ------------ Test that class constructor returns expected object ----------- #
+
     assert isinstance(db, au.MyRedShift)
 
-    # Check attributes
+    # ----------------------------- Check attributes ----------------------------- #
+
     assert db.db_name == params[0]
     assert db.host == params[1]
     assert db.port == params[2]
     assert db.user == params[3]
     assert db.db_password == params[4]
 
-    # Test get_params() method
+    # ------------------------- Test get_params() method ------------------------- #
+
     assert isinstance(db.get_params(), tuple)
     assert db.get_params() == params
 
-    # Test connect() method
+    # --------------------------- Test connect() method -------------------------- #
+
     assert isinstance(db.connect(), connection)
 
-    # Test read_tbl() method
-    # Other branch chunksize!=None currently cannot be tested due to pandas internals incompatible with pytest_mock_resources
+    # -------------------------- Test read_tbl() method -------------------------- #
+
+    # Other branch chunksize!=None cannot be tested currently due to pandas internals being incompatible with pytest_mock_resources
     pd.testing.assert_frame_equal(
         db.read_tbl(tbl='test', chunksize=None),
         pd.DataFrame({
@@ -453,7 +425,8 @@ def test_MyRedShift(redshift):
         })
     )
 
-    # Test read_query() method
+    # -------------------------- Test read_tbl() method -------------------------- #
+
     pd.testing.assert_frame_equal(
         db.read_query(sql="SELECT * FROM test;", chunksize=None),
         pd.DataFrame({
@@ -462,6 +435,39 @@ def test_MyRedShift(redshift):
             'num': (3, 4) * 5
         })
     )
+
+    # ------------------------ Test create_tables() method ----------------------- #
+
+    # -------------------------------- Exceptions -------------------------------- #
+
+    @pytest.mark.parametrize(
+        "commands",
+        [
+            # Case 1
+            ["command1", "command2"],
+            # Case 2
+            "single_statement"
+
+        ],
+        scope='function'
+    )
+    def test_create_tables_type_error(self, commands):
+        """
+        Exception raised that 'commands' must be a tuple. This may be changed to allow more flexibility in the future.
+        """
+        with pytest.raises(TypeError, match="'commands' must be a tuple"):
+            db.create_tables(commands)
+
+    @pytest.mark.parametrize(
+        "commands", [("command1", b'commands2')],
+        scope='function'
+    )
+    def test_create_tables_element_error(self, commands):
+        """
+        Exception raised that all elements in 'commands' must be strings.
+        """
+        with pytest.raises(TypeError, match="All CREATE TABLE statements in 'commands' must be string objects"):
+            db.create_tables(commands)
 
 # ----------------------- Tests for the AwsCreds class ----------------------- #
 
@@ -527,15 +533,15 @@ def test_database_interaction(redshift, create_commands):
         credentials['user'],
         credentials['password']
     )
+    # Instantiate a class
+    db = au.MyRedShift(*params)
 
     # ----------------------------- Test create table ---------------------------- #
 
-    au.create_tables(
-        create_commands,
-        *params
+    db.create_tables(
+        create_commands
     )
-    # Instantiate a class and retrieve created empty tables
-    db = au.MyRedShift(*params)
+    # Retrieve created tables
     df1 = db.read_tbl('test1', None)
     df2 = db.read_tbl('test2', None)
     # Check if columns match those listed in the create statements

@@ -150,44 +150,6 @@ class TestInputValidation:
         with pytest.raises(ValueError, match="'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths"):
             au.create_statements(df_seq, tbl_names, primary_keys)
 
-    # --------------------------- Tests for rename_tbl --------------------------- #
-
-    @pytest.mark.parametrize(
-        "old_nms, new_nms",
-        [
-            # Case 1 (set old name)
-            (
-                {'old1'},
-                ('new1', 'new2')
-            ),
-            # Case 2 (arguments must either be all strings or all sequences)
-            (
-                ["old"],
-                "new"
-            )
-        ],
-        scope='function'
-    )
-    def test_rename_tbl_type_error(self, old_nms, new_nms):
-        """
-        Exception raised that 'old_nms' and 'new_nms' must be sequences like lists or tuples.
-        """
-        with pytest.raises(TypeError, match="'old_nms' and 'new_nms' must be sequences like lists or tuples"):
-            au.rename_tbl(old_nms, new_nms, db_name="name", host="host",
-                          port="port", user="user", db_password="pass")
-
-    @pytest.mark.parametrize(
-        "old_nms, new_nms", [(('old1', 'old2'), ['new'] * 3)],
-        scope='function'
-    )
-    def test_rename_tbl_len_error(self, old_nms, new_nms):
-        """
-        Exception raised that 'old_nms' and 'new_nms' must have equal lengths.
-        """
-        with pytest.raises(ValueError, match="'old_nms' and 'new_nms' must have equal lengths"):
-            au.rename_tbl(old_nms, new_nms, db_name="name", host="host",
-                          port="port", user="user", db_password="pass")
-
 # ---------------------------------------------------------------------------- #
 #    Test that create statement functions infer column 'dtypes' accordingly    #
 # ---------------------------------------------------------------------------- #
@@ -316,7 +278,7 @@ def test_MyRedShift(redshift):
         credentials['user'],
         credentials['password']
     )
-    # Instantiate class
+    # Instantiate class instance
     db = au.MyRedShift(*params)
 
     # ------------ Test that class constructor returns expected object ----------- #
@@ -471,6 +433,44 @@ def test_MyRedShift(redshift):
         with pytest.raises(ValueError, match="'tbl_names', 'old_nms', and 'new_nms' must have equal lengths"):
             db.rename_col(tbl_names, old_nms, new_nms)
 
+    # ------------------------- Test rename_tbl() method ------------------------- #
+
+    # -------------------------------- Exceptions -------------------------------- #
+
+    @pytest.mark.parametrize(
+        "old_nms, new_nms",
+        [
+            # Case 1 (set old name)
+            (
+                {'old1', 'old2'},
+                ('new1', 'new2')
+            ),
+            # Case 2 (arguments must either be all strings or all sequences)
+            (
+                ["old"],
+                "new"
+            )
+        ],
+        scope='function'
+    )
+    def test_rename_tbl_type_error(self, old_nms, new_nms):
+        """
+        Exception raised that 'old_nms' and 'new_nms' must be sequences like lists or tuples.
+        """
+        with pytest.raises(TypeError, match="'old_nms' and 'new_nms' must be sequences like lists or tuples"):
+            db.rename_tbl(old_nms, new_nms)
+
+    @pytest.mark.parametrize(
+        "old_nms, new_nms", [(('old1', 'old2'), ['new'] * 3)],
+        scope='function'
+    )
+    def test_rename_tbl_len_error(self, old_nms, new_nms):
+        """
+        Exception raised that 'old_nms' and 'new_nms' must have equal lengths.
+        """
+        with pytest.raises(ValueError, match="'old_nms' and 'new_nms' must have equal lengths"):
+            db.rename_tbl(old_nms, new_nms)
+
 # ---------------------------------------------------------------------------- #
 #                         Tests for the AwsCreds class                         #
 # ---------------------------------------------------------------------------- #
@@ -490,7 +490,7 @@ class TestAwsCreds:
         """
         Tests for the AwsCreds class constructor.
         """
-        # Instantiate
+        # Instantiate a class instance
         creds = au.AwsCreds(*aws_creds)
 
         # Attributes
@@ -537,7 +537,7 @@ def test_database_interaction(redshift, create_commands):
         credentials['user'],
         credentials['password']
     )
-    # Instantiate a class
+    # Instantiate a class instance
     db = au.MyRedShift(*params)
 
     # ----------------------------- Test create table ---------------------------- #
@@ -557,7 +557,7 @@ def test_database_interaction(redshift, create_commands):
     # ---------------------------------- Case 1 ---------------------------------- #
 
     # Change table names (multiple statements)
-    au.rename_tbl(('test1', 'test2'), ('new1', 'new2'), *params)
+    db.rename_tbl(('test1', 'test2'), ('new1', 'new2'))
     # Verify by reading the tables using their new names and checking if they contain original columns
     assert db.read_tbl('new1', None).columns.tolist() == ['col', 'key']
     assert db.read_tbl('new2', None).columns.tolist() == [
@@ -566,7 +566,7 @@ def test_database_interaction(redshift, create_commands):
     # ---------------------------------- Case 2 ---------------------------------- #
 
     # Change table name (single statement)
-    au.rename_tbl('test3', 'new3', *params)
+    db.rename_tbl('test3', 'new3')
     # Verify by reading the table using its new name and checking if it contain original columns
     assert db.read_tbl('new3', None).columns.tolist() == ['col3', 'key3']
 

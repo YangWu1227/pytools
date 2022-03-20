@@ -632,86 +632,63 @@ class MyRedShift(object):
         except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
             print(error)
 
- # ----------------- Function to rename tables in the database ---------------- #
+    # ----------------- Function to rename tables in the database ---------------- #
 
+    def rename_tbl(self,
+                   old_nms: Union[List[str], Tuple[str], str],
+                   new_nms: Union[List[str], Tuple[str], str]) -> None:
+        """
+        This function accepts strings or sequences of equal lengths, executing the `ALTER TABLE RENAME TO` statements in the database. For batch executeing multiple rename statements, 
+        the arguments must be sequences like a `list` or `tuple`. Each element in the two sequences must match in order for the query to be executed successfully.
 
-def rename_tbl(old_nms: Union[List[str], Tuple[str], str],
-               new_nms: Union[List[str], Tuple[str], str],
-               db_name: str,
-               host: str,
-               port: str,
-               user: str,
-               db_password: str) -> None:
-    """
-    This function accepts strings or sequences of equal lengths, executing the `ALTER TABLE RENAME TO` statements in the database. For batch executeing multiple rename statements, 
-    the arguments must be sequences like a `list` or `tuple`. Each element in the two sequences must match in order for the query to be executed successfully. For database connection
-    parameters, you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters. See `?MyRedShift` for storing
-    connection parameters. 
+        Parameters
+        ----------
+        old_nms : str or Sequence of str
+            A sequence containing original table names or a single str.
+        new_nms : str or Sequence of str
+            A sequence containing new table names or a single str.
 
-    Parameters
-    ----------
-    old_nms : str or Sequence of str
-        A sequence containing original table names or a single str.
-    new_nms : str or Sequence of str
-        A sequence containing new table names or a single str.
-    db_name : str
-        Database name.
-    host : str
-        Database host address.
-    port : str
-        Connection port number.
-    user : str
-        User name used to authenticate.
-    db_password : str
-        Database password.
+        Raises
+        ------
+        TypeError
+            The arguments 'old_nms' and 'new_nms' must be registered as Sequences.
+        ValueError
+            The sequences 'old_nms' and 'new_nms' must have equal lengths.
+        """
+        # If all arguments are str, coerce to tuples
+        if (isinstance(old_nms, str) and isinstance(new_nms, str)):
+            old_nms, new_nms = (old_nms,), (new_nms,)
 
-    Raises
-    ------
-    TypeError
-        The arguments 'old_nms' and 'new_nms' must be registered as Sequences.
-    ValueError
-        The sequences 'old_nms' and 'new_nms' must have equal lengths.
-    """
-    # If all arguments are str, coerce to tuples
-    if (isinstance(old_nms, str) and isinstance(new_nms, str)):
-        old_nms, new_nms = (old_nms,), (new_nms,)
+        # Check input
+        if not (is_sequence(old_nms) and is_sequence(new_nms)):
+            raise TypeError(
+                "'old_nms' and 'new_nms' must be sequences like lists or tuples")
+        if not len(old_nms) == len(new_nms):
+            raise ValueError(
+                "'old_nms' and 'new_nms' must have equal lengths")
 
-    # Check input
-    if not (is_sequence(old_nms) and is_sequence(new_nms)):
-        raise TypeError(
-            "'old_nms' and 'new_nms' must be sequences like lists or tuples")
-    if not len(old_nms) == len(new_nms):
-        raise ValueError(
-            "'old_nms' and 'new_nms' must have equal lengths")
-
-    try:
-        # Connection object
-        conn = py.connect(
-            dbname=db_name,
-            host=host,
-            port=port,
-            user=user,
-            password=db_password
-        )
-        # Cursor object
-        cur = conn.cursor()
-        # Copy tables iteratively
-        for old_nm, new_nm in zip(old_nms, new_nms):
-            cur.execute(
-                f'''
-                ALTER TABLE {old_nm} RENAME TO {new_nm}
-                '''
-            )
-        # Close cursor
-        cur.close()
-        # Commit changes
-        conn.commit()
-        # Close
-        if conn is not None:
-            conn.close()
-    # Catch UndefinedTable with py.ProgrammingError class
-    except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
-        print(error)
+        try:
+            # Connection object
+            conn = self.connect()
+            # Cursor object
+            cur = conn.cursor()
+            # Copy tables iteratively
+            for old_nm, new_nm in zip(old_nms, new_nms):
+                cur.execute(
+                    f'''
+                    ALTER TABLE {old_nm} RENAME TO {new_nm}
+                    '''
+                )
+            # Close cursor
+            cur.close()
+            # Commit changes
+            conn.commit()
+            # Close
+            if conn is not None:
+                conn.close()
+        # Catch UndefinedTable with py.ProgrammingError class
+        except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
+            print(error)
 
 
 # ---------------------------------------------------------------------------- #

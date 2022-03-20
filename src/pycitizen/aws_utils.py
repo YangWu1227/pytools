@@ -448,6 +448,8 @@ class MyRedShift(object):
             )
             return pd.concat(list(gen_obj))
 
+    # ------------------- Function to create tables in RedShift ------------------ #
+
     def create_tables(self, commands: Tuple[str]) -> None:
         """
         When passed a tuple of SQL commands, this function executes the commands and commits the
@@ -491,98 +493,75 @@ class MyRedShift(object):
         except (Exception, py.DatabaseError, py.DataError, py.OperationalError) as error:
             print(error)
 
+        # ------------ Function to copy tables from S3 bucket to database ------------ #
 
-# ------------ Function to copy tables from S3 bucket to database ------------ #
+    def copy_tables(table_names: Union[List[str], Tuple[str]],
+                    paths: Union[List[str], Tuple[str]],
+                    access_key: str,
+                    secret_key: str) -> None:
+        """
+        This function accepts a sequence of table names and a sequence of data-source paths, and it loads data into a table in
+        the database hosted on Amazon Redshift. Currently, the only implemented data-source is AWS S3. For aws credentials parameters, 
+        you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters.
+        See `?AwsCreds` for storing these credentials parameters.
 
+        Parameters
+        ----------
+        table_names : Sequence of str
+            The name of the target table for the COPY command. The table must already
+            exist in the database. The table can be temporary or persistent. The COPY command appends the
+            new input data to any existing rows in the table.
+        paths : Sequence of str
+            The location of the source data to be loaded into the target table. A manifest file
+            can be specified with some data sources. The most commonly used data repository is an Amazon S3 bucket.
+        access_key : str
+            AWS access key.
+        secret_key : str
+            AWS secret key.
 
-def copy_tables(table_names: Union[List[str], Tuple[str]],
-                paths: Union[List[str], Tuple[str]],
-                access_key: str,
-                secret_key: str,
-                db_name: str,
-                host: str,
-                port: str,
-                user: str,
-                db_password: str) -> None:
-    """
-    This function accepts a sequence of table names and a sequence of data-source paths, and it loads data into a table in
-    the database hosted on Amazon Redshift. Currently, the only implemented data-source is AWS S3. For database connection parameters, 
-    you may store all parameters in a sequence container and unpack the sequence so that all elements are passed as different parameters.
-    See `?MyRedShift` for storing connection parameters.
+        Raises
+        ------
+        TypeError
+            The arguments 'table_names' and 'paths' must be registered as Sequences.
+        ValueError
+            The sequences 'table_names' and 'paths' must have equal lengths.
+        """
+        # Check input
+        if not (is_sequence(table_names) and is_sequence(paths)):
+            raise TypeError(
+                "'table_names' and 'paths' must be sequences like lists or tuples")
+        if not len(table_names) == len(paths):
+            raise ValueError(
+                "'table_names' and 'paths' must have equal lengths")
 
-    Parameters
-    ----------
-    table_names : Sequence of str
-        The name of the target table for the COPY command. The table must already
-        exist in the database. The table can be temporary or persistent. The COPY command appends the
-        new input data to any existing rows in the table.
-    paths : Sequence of str
-        The location of the source data to be loaded into the target table. A manifest file
-        can be specified with some data sources. The most commonly used data repository is an Amazon S3 bucket.
-    access_key : str
-        AWS access key.
-    secret_key : str
-        AWS secret key.
-    db_name : str
-        Database name.
-    host : str
-        Database host address.
-    port : str
-        Connection port number.
-    user : str
-        User name used to authenticate.
-    db_password : str
-        Database password.
-
-    Raises
-    ------
-    TypeError
-        The arguments 'table_names' and 'paths' must be registered as Sequences.
-    ValueError
-        The sequences 'table_names' and 'paths' must have equal lengths.
-    """
-    # Check input
-    if not (is_sequence(table_names) and is_sequence(paths)):
-        raise TypeError(
-            "'table_names' and 'paths' must be sequences like lists or tuples")
-    if not len(table_names) == len(paths):
-        raise ValueError(
-            "'table_names' and 'paths' must have equal lengths")
-
-    try:
-        # Connection object
-        conn = py.connect(
-            dbname=db_name,
-            host=host,
-            port=port,
-            user=user,
-            password=db_password
-        )
-        # Cursor object
-        cur = conn.cursor()
-        # Copy tables iteratively
-        for table_name, path in zip(table_names, paths):
-            cur.execute(
-                f'''
-                COPY {table_name}
-                FROM '{path}'
-                CSV
-                IGNOREHEADER 1
-                FILLRECORD
-                EMPTYASNULL
-                ACCESS_KEY_ID '{access_key}'
-                SECRET_ACCESS_KEY '{secret_key}'
-                '''
-            )
-        # Close cursor
-        cur.close()
-        # Commit changes
-        conn.commit()
-        # Close
-        if conn is not None:
-            conn.close()
-    except (Exception, py.DatabaseError, py.DataError, NoCredentialsError) as error:
-        print(error)
+        try:
+            # Connection object
+            conn = self.connect()
+            # Cursor object
+            cur = conn.cursor()
+            # Copy tables iteratively
+            for table_name, path in zip(table_names, paths):
+                cur.execute(
+                    f'''
+                        COPY {table_name}
+                        FROM '{path}'
+                        CSV
+                        IGNOREHEADER 1
+                        FILLRECORD
+                        EMPTYASNULL
+                        ACCESS_KEY_ID '{access_key}'
+                        SECRET_ACCESS_KEY '{secret_key}'
+                        '''
+                )
+            # Close cursor
+            cur.close()
+            # Commit changes
+            conn.commit()
+            # Close
+            if conn is not None:
+                conn.close()
+        except (Exception, py.DatabaseError, py.DataError, NoCredentialsError) as error:
+            print(error)
 
 # ------------- Function to rename table columns in the database ------------- #
 

@@ -150,40 +150,6 @@ class TestInputValidation:
         with pytest.raises(ValueError, match="'df_seq', 'tbl_names', and 'primary_keys' must have equal lengths"):
             au.create_statements(df_seq, tbl_names, primary_keys)
 
-    # --------------------------- Tests for copy_tables -------------------------- #
-
-    @pytest.mark.parametrize(
-        "tbl_names, paths",
-        [
-            # Case 1 (wrong type for tbl_names)
-            ("single_tbl_name", ("path1", "path2")),
-            # Case 2 (wrong type for paths)
-            (["tbl_name1", "tbl_name2"], "single_path"),
-            # Case 3 (both are not sequences)
-            ("single_name", "single_path")
-        ],
-        scope='function'
-    )
-    def test_copy_tables_type_error(self, tbl_names, paths):
-        """
-        Exception raised that 'table_names' and 'paths' must be sequences like lists or tuples.
-        """
-        with pytest.raises(TypeError, match="'table_names' and 'paths' must be sequences like lists or tuples"):
-            au.copy_tables(tbl_names, paths, access_key="abcd", secret_key="efgh", db_name="name", host="host",
-                           port="port", user="user", db_password="pass")
-
-    @pytest.mark.parametrize(
-        "tbl_names, paths", [(['tbl1', 'tbl2'], ['path'] * 3)],
-        scope='function'
-    )
-    def test_copy_tables_len_error(self, tbl_names, paths):
-        """
-        Exception raised that 'table_names' and 'paths' must have equal lengths.
-        """
-        with pytest.raises(ValueError, match="'table_names' and 'paths' must have equal lengths"):
-            au.copy_tables(tbl_names, paths, access_key="abcd", secret_key="efgh", db_name="name", host="host",
-                           port="port", user="user", db_password="pass")
-
     # --------------------------- Tests for rename_col --------------------------- #
 
     @pytest.mark.parametrize(
@@ -368,7 +334,9 @@ statements = Statements(
     """
 )
 
-# ---------------------- Tests for the MyRedshift class ---------------------- #
+# ---------------------------------------------------------------------------- #
+#                        Tests for the MyRedshift class                        #
+# ---------------------------------------------------------------------------- #
 
 redshift = create_redshift_fixture(
     statements,
@@ -469,7 +437,43 @@ def test_MyRedShift(redshift):
         with pytest.raises(TypeError, match="All CREATE TABLE statements in 'commands' must be string objects"):
             db.create_tables(commands)
 
-# ----------------------- Tests for the AwsCreds class ----------------------- #
+    # ------------------------- Test copy_tables() method ------------------------ #
+
+    # -------------------------------- Exceptions -------------------------------- #
+
+    @pytest.mark.parametrize(
+        "tbl_names, paths",
+        [
+            # Case 1 (wrong type for tbl_names)
+            ("single_tbl_name", ("path1", "path2")),
+            # Case 2 (wrong type for paths)
+            (["tbl_name1", "tbl_name2"], "single_path"),
+            # Case 3 (both are not sequences)
+            ("single_name", "single_path")
+        ],
+        scope='function'
+    )
+    def test_copy_tables_type_error(self, tbl_names, paths):
+        """
+        Exception raised that 'table_names' and 'paths' must be sequences like lists or tuples.
+        """
+        with pytest.raises(TypeError, match="'table_names' and 'paths' must be sequences like lists or tuples"):
+            db.copy_tables(tbl_names, paths)
+
+    @pytest.mark.parametrize(
+        "tbl_names, paths", [(['tbl1', 'tbl2'], ['path'] * 3)],
+        scope='function'
+    )
+    def test_copy_tables_len_error(self, tbl_names, paths):
+        """
+        Exception raised that 'table_names' and 'paths' must have equal lengths.
+        """
+        with pytest.raises(ValueError, match="'table_names' and 'paths' must have equal lengths"):
+            db.copy_tables(tbl_names, paths)
+
+# ---------------------------------------------------------------------------- #
+#                         Tests for the AwsCreds class                         #
+# ---------------------------------------------------------------------------- #
 
 
 @pytest.fixture

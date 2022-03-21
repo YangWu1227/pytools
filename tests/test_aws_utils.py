@@ -471,6 +471,14 @@ def test_MyRedShift(redshift):
         with pytest.raises(ValueError, match="'old_nms' and 'new_nms' must have equal lengths"):
             db.rename_tbl(old_nms, new_nms)
 
+    # ------------------------- Test drop_tbl() method --------------------------- #
+
+    # -------------------------------- Exceptions -------------------------------- #
+
+    with pytest.raises(TypeError, match="'tbl_names' must be sequences like lists or tuples"):
+        db.drop_tbl({'tbl1', 'tbl2'})
+
+
 # ---------------------------------------------------------------------------- #
 #                         Tests for the AwsCreds class                         #
 # ---------------------------------------------------------------------------- #
@@ -613,6 +621,22 @@ def test_database_interaction(redshift, create_commands):
     # Verify if column name has been changed
     df4_new = db.read_tbl('test4', None)
     assert df4_new.columns.tolist() == ['new_col4', 'new_col4_4', 'key4']
+
+    # ------------------------------ Test drop table ----------------------------- #
+
+    # Single string
+    db.drop_tbl('test4')
+    # Check if table is removed
+    with pytest.raises(pd.io.sql.DatabaseError, match='relation "test4" does not exist'):
+        db.read_tbl('test4', None)
+
+    # Sequence of tables names
+    db.drop_tbl(('new1', 'new2'))
+    # Check if tables are removed
+    with pytest.raises(pd.io.sql.DatabaseError, match='relation "new1" does not exist'):
+        db.read_tbl('new1', None)
+    with pytest.raises(pd.io.sql.DatabaseError, match='relation "new2" does not exist'):
+        db.read_tbl('new2', None)
 
 # ---------------------------------------------------------------------------- #
 #                       Tests for S3 interaction function                      #

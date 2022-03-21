@@ -690,6 +690,54 @@ class MyRedShift(object):
         except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
             print(error)
 
+    # ------------------ Function to drop tables in the database ----------------- #
+
+    def drop_tbl(self, tbl_names: Union[List[str], Tuple[str], str]) -> None:
+        """
+        This function accepts a single table name or a sequence of table names, executing the `DROP TABLE` statement in the database.
+
+        Parameters
+        ----------
+        tbl_names : str or Sequence of str
+            A sequence of table names or a single str.
+
+        Raises
+        ------
+        TypeError
+            The argument 'tbl_names' must be a sequence like lists or tuples.
+        """
+
+        # If the argument is a str, coerce to tuples
+        if isinstance(tbl_names, str):
+            tbl_names = (tbl_names,)
+
+        # Check input
+        if not is_sequence(tbl_names):
+            raise TypeError(
+                "'tbl_names' must be sequences like lists or tuples")
+
+        try:
+            # Connection object
+            conn = self.connect()
+            # Cursor object
+            cur = conn.cursor()
+            # Copy tables iteratively
+            for tbl in tbl_names:
+                cur.execute(
+                    f'''
+                    DROP TABLE {tbl}
+                    '''
+                )
+            # Close cursor
+            cur.close()
+            # Commit changes
+            conn.commit()
+            # Close
+            if conn is not None:
+                conn.close()
+        # Catch UndefinedTable with py.ProgrammingError class
+        except (Exception, py.DatabaseError, py.DataError, py.ProgrammingError) as error:
+            print(error)
 
 # ---------------------------------------------------------------------------- #
 #                          Interacting with S3 storage                         #

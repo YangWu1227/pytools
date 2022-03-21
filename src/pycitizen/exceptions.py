@@ -84,3 +84,23 @@ class InvalidColumnDtypeError(Exception):
 
     def __str__(self) -> str:
         return f"Columns {self.col_nms} are invalid as dtype '{self.dtype}' is expected"
+
+# ------------------------ Invalid mapping input error ----------------------- #
+
+
+class InvalidMappingKeys(Exception):
+    """
+    Exception raised when user supplied invalid mapping keys to encoding functions.
+    """
+
+    def __str__(self) -> str:
+        return "The argument 'mapping' must be a list of dictionaries with 'col' and 'mapping' as the only two keys"
+
+
+class InvalidMappingValues(Exception):
+    """
+    Exception raised when user supplied invalid mapping values to encoding functions.
+    """
+
+    def __str__(self) -> str:
+        return "The argument 'mapping' must be a list of dictionaries with a string and a dictionary as the only two values"

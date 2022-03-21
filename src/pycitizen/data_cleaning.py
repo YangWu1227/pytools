@@ -21,8 +21,14 @@ from typing import List, Dict, Tuple, Union, Optional, NamedTuple
 
 # ------------------------------- Intra-package ------------------------------ #
 
-from pycitizen.exceptions import ColumnDtypeInferError, ColumnNameKeyWordError, ColumnNameStartWithDigitError, InvalidIdentifierError, InvalidColumnDtypeError
-from pycitizen.utils import is_sequence, is_sequence_str, is_string
+from pycitizen.exceptions import (ColumnDtypeInferError,
+                                  ColumnNameKeyWordError,
+                                  ColumnNameStartWithDigitError,
+                                  InvalidIdentifierError,
+                                  InvalidColumnDtypeError,
+                                  InvalidMappingKeys,
+                                  InvalidMappingValues)
+from pycitizen.utils import is_sequence, is_sequence_str, is_string, is_encode_map
 
 # ---------------------------------------------------------------------------- #
 #                               Cleaning helpers                               #
@@ -368,14 +374,18 @@ class EncodeMap(object):
         self.data = data
         self.mapping = mapping
 
-    def to_json():
-        return None
+    def to_csv(self, path: str) -> None:
+        """
+        This function writes the list of mappings as a csv file to disk.
 
-    def to_excel():
-        return None
+        Parameters
+        ----------
+        path : str
+            The path and file name for writing the list of mappings as a csv file.
+        """
+        pd.DataFrame.from_dict(self.mapping).rename(columns={
+            "col": "Column Name", "mapping": "Description (any manipulations, recodes, etc)"}, inplace=True).to_csv(path, index=False)
 
-    def from_json():
-        return None
 
 # ---------------------------------------------------------------------------- #
 #                              Encoding functions                              #
@@ -384,7 +394,7 @@ class EncodeMap(object):
 # ----------------------- Function for ordinal encoding ---------------------- #
 
 
-def likert_encode(df: pd.DataFrame, mapping: List[dict], data_dict: Optional[bool] = True, inplace: Optional[bool] = False):
+def likert_encode(df: pd.DataFrame, mapping: List[dict], mapping_path: Optional[str] = None, inplace: Optional[bool] = False):
     """
     This function transforms specified columns using the likert scale, in which an integer vector is used to represent the classes of the categories in the columns. 
     The results of this transformation will be inaccurate if the columns contain misspellings or case inconsistencies in the categories. The `freq_tbl()` 
@@ -399,12 +409,9 @@ def likert_encode(df: pd.DataFrame, mapping: List[dict], data_dict: Optional[boo
         The dict contains a list of keys 'col' and values 'mapping'.
         The value of each 'col' should be a column name.
         The value of each 'mapping' should be a dictionary of 'original_label' to 'encoded_label'.
-        example mapping: [
-            {'col': 'col1', 'mapping': {'a': 1, 'b': 2}},
-            {'col': 'col2', 'mapping': {'x': 1, 'y': 2}}
-        ]
-    data_dict : bool, optional
-        Whether to write the list of mappings as an excel file, by default True.
+        example mapping [{'col': 'col1', 'mapping': {'a': 1, 'b': 2}}, {'col': 'col2', 'mapping': {'x': 1, 'y': 2}}]
+    mapping_path : str, optional
+        File path to write the list of mappings as a csv file, by default None, which does not write the mappings to disk.
     inplace : bool, optional
         Whether to return a new DataFrame, by default False.
 
@@ -413,6 +420,12 @@ def likert_encode(df: pd.DataFrame, mapping: List[dict], data_dict: Optional[boo
     DataFrame
         A DataFrame with transformed columns or None if inplace=True.
     """
+    # Check mapping
+    if not is_encode_map(mapping=mapping)[0]:
+        raise InvalidMappingKeys
+    elif not is_encode_map(mapping=mapping)[1]:
+        raise InvalidMappingValues
+
     # Create a copy if inplace=False
     if (not inplace):
         df = df.copy()
@@ -433,6 +446,9 @@ def likert_encode(df: pd.DataFrame, mapping: List[dict], data_dict: Optional[boo
         # Try converting to nullable integer array if possible
         # Use errors='ignore' to return original object on error
         df[col] = df[col].astype('Int64', errors='ignore')
+
+    if (mapping_path is not None):
+        EncodeMap(mapping=mapping).to_csv(mapping_path)
 
     # Return copy
     if (not inplace):

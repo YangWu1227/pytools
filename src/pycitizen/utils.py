@@ -8,6 +8,7 @@ from pandas import Series
 # ----------------------------- Standard library ----------------------------- #
 
 from collections.abc import Sequence, ByteString
+from typing import List
 
 # ---------------------------------------------------------------------------- #
 #                    Helper predicates for input validation                    #
@@ -67,3 +68,17 @@ def is_string(col: Series) -> bool:
         `True` if the Series is of the string dtype.
     """
     return is_string_dtype(col)
+
+# -------------- Helpers for encoding functions input validation ------------- #
+
+
+def is_encode_map(mapping: List[dict]) -> bool:
+
+    # Check that the keys are correct
+    keys = all((list(dict_.keys()) == ['col', 'mapping'] for dict_ in mapping))
+
+    # Check that the values are correct
+    vals = all((isinstance(list(dict_.values())[0], str) and isinstance(
+        list(dict_.values())[1], dict) for dict_ in value_map_dict_str))
+
+    return keys, vals

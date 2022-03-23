@@ -79,6 +79,6 @@ def is_encode_map(mapping: List[dict]) -> bool:
 
     # Check that the values are correct
     vals = all((isinstance(list(dict_.values())[0], str) and isinstance(
-        list(dict_.values())[1], dict) for dict_ in value_map_dict_str))
+        list(dict_.values())[1], dict) for dict_ in mapping))
 
     return keys, vals

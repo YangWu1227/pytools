@@ -3,6 +3,7 @@
 # ---------------------------------------------------------------------------- #
 
 from io import StringIO
+from turtle import right
 import pandas as pd
 import numpy as np
 import pytest
@@ -17,7 +18,13 @@ from collections import namedtuple
 # ------------------------------- Intra-package ------------------------------ #
 
 import pycitizen.data_cleaning as dc
-from pycitizen.exceptions import ColumnNameKeyWordError, ColumnNameStartWithDigitError, InvalidIdentifierError, InvalidColumnDtypeError
+from pycitizen.exceptions import (ColumnDtypeInferError,
+                                  ColumnNameKeyWordError,
+                                  ColumnNameStartWithDigitError,
+                                  InvalidIdentifierError,
+                                  InvalidColumnDtypeError,
+                                  InvalidMappingKeys,
+                                  InvalidMappingValues)
 
 
 # ---------------------------------------------------------------------------- #
@@ -514,4 +521,209 @@ class TestFindMissing:
             left=dc.find_missing(test_data, axis=0),
             right=pd.Series(
                 data=(True,) * 3, index=('likert_encode', 'str_encode', 'case_convert'))
+        )
+
+
+# ---------------------------------------------------------------------------- #
+#                       Tests for Likert encode function                       #
+# ---------------------------------------------------------------------------- #
+
+# ---------------------------- Fixture for mapping --------------------------- #
+
+@pytest.fixture(scope='class')
+def mapping():
+    return [
+        {
+            'col': 'likert_encode',
+            'mapping': {
+                'A': 1,
+                'B': 2,
+                'C': 3,
+                'D': 4,
+                'E': 5
+            }
+        },
+        {
+            'col': 'onehot_encode',
+            'mapping': {
+                'A': 1,
+                'B': 2
+            }
+        }
+    ]
+
+# ---------------------- Fixture for temporary csv file ---------------------- #
+
+
+@pytest.fixture(scope="session")
+def csv_file(tmpdir_factory):
+    path = tmpdir_factory.mktemp("data").join("dict.csv")
+    return path
+
+
+class TestLikert:
+    """
+    Tests for the likert_encode function.
+    """
+
+    # ------------------------ Tests for exceptions raised ----------------------- #
+
+    def test_likert_encode_errors(self, test_data, mapping):
+        """
+        Test that liker_encode raises exceptions when arguments are passed invalid inputs.
+        """
+
+        # --------- For 'df', the most common exception is the keyword error --------- #
+
+        with pytest.raises(KeyError):
+            dc.likert_encode(pd.Series(('A', 'B', 'C')), mapping)
+        with pytest.raises(KeyError):
+            dc.likert_encode({'df': 1}, mapping)
+
+        # ---------------------- Custom exceptions with mapping ---------------------- #
+
+        # Wrong key for 'col'
+        with pytest.raises(InvalidMappingKeys, match="The argument 'mapping' must be a list of dictionaries with 'col' and 'mapping' as the only two keys"):
+            dc.likert_encode(
+                test_data, [{
+                    'wrong_key': 'onehot_encode',
+                    'mapping': {'A': 1, 'B': 2}}
+                ])
+        # Wrong key for 'mapping'
+        with pytest.raises(InvalidMappingKeys, match="The argument 'mapping' must be a list of dictionaries with 'col' and 'mapping' as the only two keys"):
+            dc.likert_encode(
+                test_data, [{
+                    'col': 'onehot_encode',
+                    'wrong_values': {'A': 1, 'B': 2}}
+                ])
+        # Invalid values in 'mapping'
+        # The first value should be a str object
+        with pytest.raises(InvalidMappingValues, match="The argument 'mapping' must be a list of dictionaries with a string and a dictionary as the only two values"):
+            dc.likert_encode(
+                test_data, [{
+                    'col': 3,
+                    'mapping': {'A': 1, 'B': 2}}
+                ])
+        # The second value should be a dict
+        with pytest.raises(InvalidMappingValues, match="The argument 'mapping' must be a list of dictionaries with a string and a dictionary as the only two values"):
+            dc.likert_encode(
+                test_data, [{
+                    'col': 'onehot_encode',
+                    'mapping': (1, 2, 3)}
+                ])
+
+        # If mapping is not a list of dictionary, an attribute error will be raised since other objects do not have the 'keys' attribute
+        with pytest.raises(AttributeError):
+            dc.likert_encode(test_data, [3])
+        with pytest.raises(AttributeError):
+            dc.likert_encode(test_data, pd.Series((1, 2, 3)))
+
+        # If unknown columns are specified in 'col', key errors should be raised
+        with pytest.raises(KeyError):
+            dc.likert_encode(test_data,         {
+                'col': 'unknown',
+                'mapping': {
+                    'A': 1,
+                    'B': 2
+                }
+            })
+
+        # ---------------------- Invalid inputs for mapping_path --------------------- #
+
+        # Invalid map_path leads to ValueError in pandas' to_csv method
+        with pytest.raises(ValueError):
+            dc.likert_encode(test_data, mapping, mapping_path=True)
+        with pytest.raises(ValueError):
+            dc.likert_encode(test_data, mapping,
+                             mapping_path=['false', 'path'])
+
+    # -------------------------- Tests for functionality ------------------------- #
+
+    def test_likert_encode(self, test_data, mapping, csv_file):
+        """
+        Test that liker_encode returns correct output given a set of inputs.
+        """
+
+        # --------------------------------- Base case -------------------------------- #
+
+        # Encoded columns should have 'Int64' as dtypes
+        pd.testing.assert_frame_equal(
+            left=dc.likert_encode(test_data, mapping)[[
+                'likert_encode', 'onehot_encode']],
+            right=pd.DataFrame({
+                'likert_encode': pd.array((1, 1, 2, 3, 4, 4, 3, pd.NA, 3, 5), dtype=pd.Int64Dtype()),
+                'onehot_encode': pd.array([1] * 5 + [2] * 5, dtype=pd.Int64Dtype())
+            })
+        )
+
+        # ----------------------------- Single dictionary ---------------------------- #
+
+        pd.testing.assert_series_equal(
+            left=dc.likert_encode(test_data, mapping={
+                'col': 'onehot_encode',
+                'mapping': {
+                    'A': 1,
+                    'B': 2
+                }
+            })['onehot_encode'],
+            right=pd.Series(
+                pd.array([1] * 5 + [2] * 5, dtype=pd.Int64Dtype()), name='onehot_encode'
+            )
+        )
+
+        # ------------------ Test saving mapping dictionary to disk ------------------ #
+
+        dc.likert_encode(test_data, mapping, mapping_path=csv_file)
+        # Read file from disk and check column names
+        assert pd.read_csv(csv_file).columns.tolist() == [
+            'Column Name', 'Description (any manipulations, recodes, etc)']
+        # Check content of file written to disk
+        pd.testing.assert_frame_equal(
+            left=pd.read_csv(csv_file),
+            right=pd.DataFrame({
+                'Column Name': ('likert_encode', 'onehot_encode'),
+                'Description (any manipulations, recodes, etc)': ("{'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5}", "{'A': 1, 'B': 2}")
+            })
+        )
+
+        # -------------------------------- Edge cases -------------------------------- #
+
+        # If unknown mappings are specified in 'mapping', encoding should return NA's
+        pd.testing.assert_series_equal(
+            left=dc.likert_encode(test_data, {
+                'col': 'onehot_encode',
+                'mapping': {'not_found': 1, 'unknown': 2}})['onehot_encode'],
+            right=pd.Series([pd.NA] * 10, name='onehot_encode', dtype='Int64')
+        )
+
+        # Values that are not in the dictionary (as keys) are converted to NaN and NA
+        pd.testing.assert_series_equal(
+            # Everything other than 'A' and 'B' should be NA
+            left=dc.likert_encode(test_data, {
+                'col': 'likert_encode',
+                'mapping': {'A': 1, 'B': 2}})['likert_encode'],
+            right=pd.Series((1, 1, 2, pd.NA, pd.NA, pd.NA, pd.NA,
+                            pd.NA, pd.NA, pd.NA), name='likert_encode', dtype='Int64')
+        )
+
+        # Columns containing None should be treated as np.NaN
+        pd.testing.assert_series_equal(
+            # Everything other than 'A' and 'B' should be NA
+            left=dc.likert_encode(
+                pd.DataFrame({'None': ('A', None, None, 'B')}), mapping={
+                    'col': 'None',
+                    'mapping': {'A': 1, 'B': 2}})['None'],
+            right=pd.Series((1, pd.NA, pd.NA, 2), name='None', dtype='Int64')
+        )
+
+        # Mapping to float instead of integers should return a series with dtype as 'float64'
+        # This is because df[col].astype(errors='ignore') should return original object on error
+        pd.testing.assert_series_equal(
+            # Everything other than 'A' and 'B' should be NA
+            left=dc.likert_encode(
+                pd.DataFrame({'float': ('A', None, 'C', 'B', 'D')}), mapping={
+                    'col': 'float',
+                    'mapping': {'A': 1, 'B': 2, 'C': -999, 'D': 2.34}})['float'],
+            right=pd.Series((1, np.NaN, -999, 2, 2.34),
+                            name='float', dtype='float64')
         )

@@ -383,8 +383,10 @@ class EncodeMap(object):
         path : str
             The path and file name for writing the list of mappings as a csv file.
         """
-        pd.DataFrame.from_dict(self.mapping).rename(columns={
-            "col": "Column Name", "mapping": "Description (any manipulations, recodes, etc)"}, inplace=True).to_csv(path, index=False)
+        mapping_df = pd.DataFrame.from_dict(self.mapping)
+        mapping_df.rename(columns={
+            "col": "Column Name", "mapping": "Description (any manipulations, recodes, etc)"}, inplace=True)
+        mapping_df.to_csv(path, index=False)
 
 
 # ---------------------------------------------------------------------------- #
@@ -404,7 +406,7 @@ def likert_encode(df: pd.DataFrame, mapping: List[dict], mapping_path: Optional[
     Parameters
     ----------
     df : DataFrame
-    mapping : list of dict
+    mapping : list of dict or dict
         This must be a mapping of categories to labels for the encoding.
         The dict contains a list of keys 'col' and values 'mapping'.
         The value of each 'col' should be a column name.
@@ -420,6 +422,10 @@ def likert_encode(df: pd.DataFrame, mapping: List[dict], mapping_path: Optional[
     DataFrame
         A DataFrame with transformed columns or None if inplace=True.
     """
+    # If passed a single dict, convert to list
+    if isinstance(mapping, dict):
+        mapping = [mapping]
+
     # Check mapping
     if not is_encode_map(mapping=mapping)[0]:
         raise InvalidMappingKeys

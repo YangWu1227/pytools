@@ -515,7 +515,7 @@ def onehot_encode(df: pd.DataFrame, cols: Union[List[str], Tuple[str], str]) -> 
     transformed_df = pd.get_dummies(
         data=subset,
         prefix=prefix,
-        dummy_na=True,
+        dummy_na=False,
         dtype=np.uint8
     )
 

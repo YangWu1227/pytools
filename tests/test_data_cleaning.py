@@ -570,7 +570,7 @@ class TestLikert:
 
     def test_likert_encode_errors(self, test_data, mapping):
         """
-        Test that liker_encode raises exceptions when arguments are passed invalid inputs.
+        Test that likert_encode raises exceptions when arguments are passed invalid inputs.
         """
 
         # --------- For 'df', the most common exception is the keyword error --------- #
@@ -726,4 +726,135 @@ class TestLikert:
                     'mapping': {'A': 1, 'B': 2, 'C': -999, 'D': 2.34}})['float'],
             right=pd.Series((1, np.NaN, -999, 2, 2.34),
                             name='float', dtype='float64')
+        )
+
+# ---------------------------------------------------------------------------- #
+#                       Tests for onehot encode function                       #
+# ---------------------------------------------------------------------------- #
+
+
+class TestOnehot:
+    """
+    Tests for the onehot_encode function.
+    """
+
+    # -------------------------------- Exceptions -------------------------------- #
+
+    def test_onehot_encode_errors(self, test_data):
+        """
+        Test that onehot_encode raises exceptions when arguments are passed invalid inputs.
+        """
+
+        # ---------------------------- Enforced exceptions --------------------------- #
+
+        # Invalid type for 'df'
+        with pytest.raises(TypeError, match="'df' must be be a DataFrame"):
+            dc.onehot_encode(
+                pd.Series(('A', 'B', 'C'), name='col'), cols='col')
+
+        # Invalid type for 'cols'
+        with pytest.raises(TypeError, match="'cols' must be a sequence like a list or tuple or a single string"):
+            dc.onehot_encode(test_data, cols=range(1, 3))
+
+        # -------------------------- Not enforced exceptions ------------------------- #
+
+        # Supply columns that do not exist in 'df'
+        with pytest.raises(KeyError):
+            dc.onehot_encode(test_data, cols=['do_not_exist', 'onehot_encode'])
+
+        # Attempts to select columns to encode using integer indices
+        with pytest.raises(KeyError):
+            dc.onehot_encode(test_data, cols=list(range(1, 3)))
+
+        # Attempts to select columns to encode using boolean indices
+        with pytest.raises(KeyError):
+            dc.onehot_encode(test_data, cols=(True, False))
+
+        # -------------------------- Tests for functionality ------------------------- #
+
+        # --------------------------------- Base case -------------------------------- #
+
+        pd.testing.assert_frame_equal(
+            left=dc.onehot_encode(test_data, 'onehot_encode')[
+                ['onehot_encode', 'onehot_encode_A', 'onehot_encode_B']],
+            right=pd.DataFrame({
+                'onehot_encode': pd.array(['A'] * 5 + ['B'] * 5, dtype='object'),
+                'onehot_encode_A': pd.array([1] * 5 + [0] * 5, dtype=np.uint8),
+                'onehot_encode_B': pd.array([0] * 5 + [1] * 5, dtype=np.uint8)
+            })
+        )
+
+        # ------------------------------ Numeric columns ----------------------------- #
+
+        # Float with missing
+        pd.testing.assert_frame_equal(
+            left=dc.onehot_encode(
+                pd.DataFrame({
+                    'col': pd.array((2.1, 2.2, np.NaN), dtype='float')
+                }), 'col'),
+            right=pd.DataFrame({
+                'col': pd.array((2.1, 2.2, np.NaN), dtype='float'),
+                'col_2.1': pd.array((1, 0, 0), dtype=np.uint8),
+                'col_2.2': pd.array((0, 1, 0), dtype=np.uint8),
+                'col_nan': pd.array((0, 0, 1), dtype=np.uint8)
+            })
+        )
+
+        # Nullable Integer with missing
+        pd.testing.assert_frame_equal(
+            left=dc.onehot_encode(
+                pd.DataFrame({
+                    'col': pd.Series((1, 2, pd.NA), dtype='Int64')
+                }), 'col'),
+            right=pd.DataFrame({
+                'col': pd.array((1, 2, pd.NA), dtype='Int64'),
+                'col_1': pd.array((1, 0, 0), dtype=np.uint8),
+                'col_2': pd.array((0, 1, 0), dtype=np.uint8),
+                'col_nan': pd.array((0, 0, 1), dtype=np.uint8)
+            })
+        )
+
+        # -------------------------- String and categorical -------------------------- #
+
+        # String with missing
+        pd.testing.assert_frame_equal(
+            left=dc.onehot_encode(
+                pd.DataFrame({
+                    'col': pd.array(('A', 'B', pd.NA), dtype='string')
+                }), 'col'),
+            right=pd.DataFrame({
+                'col': pd.array(('A', 'B', pd.NA), dtype='string'),
+                'col_A': pd.array((1, 0, 0), dtype=np.uint8),
+                'col_B': pd.array((0, 1, 0), dtype=np.uint8),
+                'col_nan': pd.array((0, 0, 1), dtype=np.uint8)
+            })
+        )
+
+        # Categorical with missing
+        pd.testing.assert_frame_equal(
+            left=dc.onehot_encode(
+                pd.DataFrame({
+                    'col': pd.array(["a", "b", "c", "a", pd.NA], dtype="category")
+                }), 'col'),
+            right=pd.DataFrame({
+                'col': pd.array(["a", "b", "c", "a", pd.NA], dtype="category"),
+                'col_a': pd.array((1, 0, 0, 1, 0), dtype=np.uint8),
+                'col_b': pd.array((0, 1, 0, 0, 0), dtype=np.uint8),
+                'col_c': pd.array((0, 0, 1, 0, 0), dtype=np.uint8),
+                'col_nan': pd.array((0, 0, 0, 0, 1), dtype=np.uint8)
+            })
+        )
+
+        # Boolean with missing
+        pd.testing.assert_frame_equal(
+            left=dc.onehot_encode(
+                pd.DataFrame({
+                    'col': pd.array([True, False, pd.NA], dtype="boolean")
+                }), 'col'),
+            right=pd.DataFrame({
+                'col': pd.array([True, False, pd.NA], dtype="boolean"),
+                'col_False': pd.array((0, 1, 0), dtype=np.uint8),
+                'col_True': pd.array((1, 0, 0), dtype=np.uint8),
+                'col_nan': pd.array((0, 0, 1), dtype=np.uint8)
+            })
         )

@@ -561,37 +561,37 @@ def csv_file(tmpdir_factory):
     return path
 
 
-class TestLikert:
+class TestEncode:
     """
-    Tests for the likert_encode function.
+    Tests for the encode function.
     """
 
     # ------------------------ Tests for exceptions raised ----------------------- #
 
-    def test_likert_encode_errors(self, test_data, mapping):
+    def test_encode_errors(self, test_data, mapping):
         """
-        Test that likert_encode raises exceptions when arguments are passed invalid inputs.
+        Test that encode raises exceptions when arguments are passed invalid inputs.
         """
 
         # --------- For 'df', the most common exception is the keyword error --------- #
 
         with pytest.raises(KeyError):
-            dc.likert_encode(pd.Series(('A', 'B', 'C')), mapping)
+            dc.encode(pd.Series(('A', 'B', 'C')), mapping)
         with pytest.raises(KeyError):
-            dc.likert_encode({'df': 1}, mapping)
+            dc.encode({'df': 1}, mapping)
 
         # ---------------------- Custom exceptions with mapping ---------------------- #
 
         # Wrong key for 'col'
         with pytest.raises(InvalidMappingKeys, match="The argument 'mapping' must be a list of dictionaries with 'col' and 'mapping' as the only two keys"):
-            dc.likert_encode(
+            dc.encode(
                 test_data, [{
                     'wrong_key': 'onehot_encode',
                     'mapping': {'A': 1, 'B': 2}}
                 ])
         # Wrong key for 'mapping'
         with pytest.raises(InvalidMappingKeys, match="The argument 'mapping' must be a list of dictionaries with 'col' and 'mapping' as the only two keys"):
-            dc.likert_encode(
+            dc.encode(
                 test_data, [{
                     'col': 'onehot_encode',
                     'wrong_values': {'A': 1, 'B': 2}}
@@ -599,14 +599,14 @@ class TestLikert:
         # Invalid values in 'mapping'
         # The first value should be a str object
         with pytest.raises(InvalidMappingValues, match="The argument 'mapping' must be a list of dictionaries with a string and a dictionary as the only two values"):
-            dc.likert_encode(
+            dc.encode(
                 test_data, [{
                     'col': 3,
                     'mapping': {'A': 1, 'B': 2}}
                 ])
         # The second value should be a dict
         with pytest.raises(InvalidMappingValues, match="The argument 'mapping' must be a list of dictionaries with a string and a dictionary as the only two values"):
-            dc.likert_encode(
+            dc.encode(
                 test_data, [{
                     'col': 'onehot_encode',
                     'mapping': (1, 2, 3)}
@@ -614,13 +614,13 @@ class TestLikert:
 
         # If mapping is not a list of dictionary, an attribute error will be raised since other objects do not have the 'keys' attribute
         with pytest.raises(AttributeError):
-            dc.likert_encode(test_data, [3])
+            dc.encode(test_data, [3])
         with pytest.raises(AttributeError):
-            dc.likert_encode(test_data, pd.Series((1, 2, 3)))
+            dc.encode(test_data, pd.Series((1, 2, 3)))
 
         # If unknown columns are specified in 'col', key errors should be raised
         with pytest.raises(KeyError):
-            dc.likert_encode(test_data,         {
+            dc.encode(test_data,         {
                 'col': 'unknown',
                 'mapping': {
                     'A': 1,
@@ -632,23 +632,23 @@ class TestLikert:
 
         # Invalid map_path leads to ValueError in pandas' to_csv method
         with pytest.raises(ValueError):
-            dc.likert_encode(test_data, mapping, mapping_path=True)
+            dc.encode(test_data, mapping, mapping_path=True)
         with pytest.raises(ValueError):
-            dc.likert_encode(test_data, mapping,
-                             mapping_path=['false', 'path'])
+            dc.encode(test_data, mapping,
+                      mapping_path=['false', 'path'])
 
     # -------------------------- Tests for functionality ------------------------- #
 
-    def test_likert_encode(self, test_data, mapping, csv_file):
+    def test_encode(self, test_data, mapping, csv_file):
         """
-        Test that likert_encode returns correct output given a set of inputs.
+        Test that encode returns correct output given a set of inputs.
         """
 
-        # --------------------------------- Base case -------------------------------- #
+        # --------------------------------- Base cases ------------------------------- #
 
-        # Encoded columns should have 'Int64' as dtypes
+        # Encoded columns using likert should have 'Int64' as dtypes
         pd.testing.assert_frame_equal(
-            left=dc.likert_encode(test_data, mapping)[[
+            left=dc.encode(test_data, mapping)[[
                 'likert_encode', 'onehot_encode']],
             right=pd.DataFrame({
                 'likert_encode': pd.array((1, 1, 2, 3, 4, 4, 3, pd.NA, 3, 5), dtype=pd.Int64Dtype()),
@@ -656,10 +656,26 @@ class TestLikert:
             })
         )
 
+        # Rollup columns should have 'object' as dtypes
+        pd.testing.assert_series_equal(
+            left=dc.encode(test_data, mapping={
+                'col': 'str_encode',
+                'mapping': {
+                    'bachelor': 'bach',
+                    'college': 'less than bach',
+                    'highschool': 'less than bach',
+                    'grad': 'more than bach'
+                }
+            })['str_encode'],
+            right=pd.Series(
+                ('bach', 'less than bach', np.NaN, 'more than bach', 'more than bach', np.NaN, 'less than bach', 'less than bach', 'less than bach', 'bach'), name='str_encode', dtype='object'
+            )
+        )
+
         # ----------------------------- Single dictionary ---------------------------- #
 
         pd.testing.assert_series_equal(
-            left=dc.likert_encode(test_data, mapping={
+            left=dc.encode(test_data, mapping={
                 'col': 'onehot_encode',
                 'mapping': {
                     'A': 1,
@@ -673,7 +689,7 @@ class TestLikert:
 
         # ------------------ Test saving mapping dictionary to disk ------------------ #
 
-        dc.likert_encode(test_data, mapping, mapping_path=csv_file)
+        dc.encode(test_data, mapping, mapping_path=csv_file)
         # Read file from disk and check column names
         assert pd.read_csv(csv_file).columns.tolist() == [
             'Column Name', 'Description (any manipulations, recodes, etc)']
@@ -689,43 +705,129 @@ class TestLikert:
         # -------------------------------- Edge cases -------------------------------- #
 
         # If unknown mappings are specified in 'mapping', encoding should return NA's
+        # The returned dtypes should be 'Int64'
+
+        # Integers
         pd.testing.assert_series_equal(
-            left=dc.likert_encode(test_data, {
+            left=dc.encode(test_data, {
                 'col': 'onehot_encode',
                 'mapping': {'not_found': 1, 'unknown': 2}})['onehot_encode'],
             right=pd.Series([pd.NA] * 10, name='onehot_encode', dtype='Int64')
         )
 
-        # Values that are not in the dictionary (as keys) are converted to NaN and NA
+        # Strings
+        pd.testing.assert_series_equal(
+            left=dc.encode(test_data, {
+                'col': 'onehot_encode',
+                'mapping': {'not_found': 'str', 'unknown': 'str2'}})['onehot_encode'],
+            right=pd.Series([pd.NA] * 10, name='onehot_encode', dtype='Int64')
+        )
+
+        # Floats
+        pd.testing.assert_series_equal(
+            left=dc.encode(test_data, {
+                'col': 'onehot_encode',
+                'mapping': {'not_found': 3.3, 'unknown': 3.2}})['onehot_encode'],
+            right=pd.Series([pd.NA] * 10, name='onehot_encode', dtype='Int64')
+        )
+
+        # ----------------------- Case: unknown keys in mapping ---------------------- #
+
+        # Values that are not in the dictionary (as keys) are converted to NaN and then to pd.NA
         pd.testing.assert_series_equal(
             # Everything other than 'A' and 'B' should be NA
-            left=dc.likert_encode(test_data, {
+            left=dc.encode(test_data, {
                 'col': 'likert_encode',
                 'mapping': {'A': 1, 'B': 2}})['likert_encode'],
             right=pd.Series((1, 1, 2, pd.NA, pd.NA, pd.NA, pd.NA,
                             pd.NA, pd.NA, pd.NA), name='likert_encode', dtype='Int64')
         )
 
+        # ------------------- Case: columns with None become np.NaN ------------------ #
+
         # Columns containing None should be treated as np.NaN
         pd.testing.assert_series_equal(
             # Everything other than 'A' and 'B' should be NA
-            left=dc.likert_encode(
+            left=dc.encode(
                 pd.DataFrame({'None': ('A', None, None, 'B')}), mapping={
                     'col': 'None',
                     'mapping': {'A': 1, 'B': 2}})['None'],
             right=pd.Series((1, pd.NA, pd.NA, 2), name='None', dtype='Int64')
         )
 
+       # -------------------------- Case: mapping to floats ------------------------- #
+
         # Mapping to float instead of integers should return a series with dtype as 'float64'
         # This is because df[col].astype(errors='ignore') should return original object on error
         pd.testing.assert_series_equal(
             # Everything other than 'A' and 'B' should be NA
-            left=dc.likert_encode(
+            left=dc.encode(
                 pd.DataFrame({'float': ('A', None, 'C', 'B', 'D')}), mapping={
                     'col': 'float',
                     'mapping': {'A': 1, 'B': 2, 'C': -999, 'D': 2.34}})['float'],
             right=pd.Series((1, np.NaN, -999, 2, 2.34),
                             name='float', dtype='float64')
+        )
+
+        # ----------------- Case: string to string with 'StringDtype' ---------------- #
+
+        # String to string with dedicated string dtype
+        # Currently, the expected behavior is to return 'object' dtype for 'string' columns
+        # In other words, encoding 'string' columns to strings causes them to loose their dtype
+        pd.testing.assert_series_equal(
+            left=dc.encode(
+                pd.DataFrame({'string': pd.array(('A', pd.NA, 'C', 'B', 'D'), dtype='string')}), mapping={
+                    'col': 'string',
+                    'mapping': {'A': 'a', 'B': 'b', 'C': 'c', 'D': 'd'}})['string'],
+            right=pd.Series(('a', np.NaN, 'c', 'b', 'd'),
+                            name='string', dtype='object')
+        )
+
+        # --------------- Case: string to string with 'category' dtype --------------- #
+
+        # Categorical to string with categorical dtype
+        # Currently, the expected behavior is to also to return 'object' dtype for 'categorical' columns
+        # In other words, encoding 'category' columns to strings causes them to loose their dtype
+        pd.testing.assert_series_equal(
+            left=dc.encode(
+                pd.DataFrame({
+                    'category': pd.array(["a", "b", "c", "a", pd.NA], dtype="category")
+                }), mapping={
+                    'col': 'category',
+                    'mapping': {'a': 'large', 'b': 'small', 'c': 'small', 'a': 'large'}
+                })['category'],
+            right=pd.Series(('large', 'small', 'small', 'large', np.NaN),
+                            name='category', dtype='object')
+        )
+
+        # --------------------------- Case: integer rollup --------------------------- #
+
+        # Integer rollup should return 'Int64' dtype
+        # Missing
+        pd.testing.assert_series_equal(
+            left=dc.encode(
+                pd.DataFrame({
+                    'int': pd.array([1, 2, 3, 4, 5, pd.NA], dtype="Int64")
+                }), mapping={
+                    'col': 'int',
+                    'mapping': {1: 0, 2: 0, 3: -999, 4: 1, 5: 1}
+                })['int'],
+            right=pd.Series((0, 0, -999, 1, 1, pd.NA),
+                            name='int', dtype='Int64')
+        )
+
+        # Non-missing
+        # The output should still return 'Int64' dtype even if input is not
+        pd.testing.assert_series_equal(
+            left=dc.encode(
+                pd.DataFrame({
+                    'int': pd.array([1, 2, 3, 4, 5], dtype="int64")
+                }), mapping={
+                    'col': 'int',
+                    'mapping': {1: 0, 2: 0, 3: -999, 4: 1, 5: 1}
+                })['int'],
+            right=pd.Series((0, 0, -999, 1, 1),
+                            name='int', dtype='Int64')
         )
 
 # ---------------------------------------------------------------------------- #
@@ -808,12 +910,12 @@ class TestOnehot:
         pd.testing.assert_frame_equal(
             left=dc.onehot_encode(
                 pd.DataFrame({
-                    'col': pd.array((1, 2), dtype='Int64')
+                    'col': pd.array((1, 2, pd.NA), dtype='Int64')
                 }), 'col'),
             right=pd.DataFrame({
-                'col': pd.array((1, 2), dtype='Int64'),
-                'col_1': pd.array((1, 0), dtype=np.uint8),
-                'col_2': pd.array((0, 1), dtype=np.uint8)
+                'col': pd.array((1, 2, pd.NA), dtype='Int64'),
+                'col_1': pd.array((1, 0, 0), dtype=np.uint8),
+                'col_2': pd.array((0, 1, 0), dtype=np.uint8)
             })
         )
 
@@ -823,12 +925,12 @@ class TestOnehot:
         pd.testing.assert_frame_equal(
             left=dc.onehot_encode(
                 pd.DataFrame({
-                    'col': pd.array(('A', 'B'), dtype='string')
+                    'col': pd.array(('A', 'B', pd.NA), dtype='string')
                 }), 'col'),
             right=pd.DataFrame({
-                'col': pd.array(('A', 'B'), dtype='string'),
-                'col_A': pd.array((1, 0), dtype=np.uint8),
-                'col_B': pd.array((0, 1), dtype=np.uint8)
+                'col': pd.array(('A', 'B', pd.NA), dtype='string'),
+                'col_A': pd.array((1, 0, 0), dtype=np.uint8),
+                'col_B': pd.array((0, 1, 0), dtype=np.uint8)
             })
         )
 
@@ -836,13 +938,13 @@ class TestOnehot:
         pd.testing.assert_frame_equal(
             left=dc.onehot_encode(
                 pd.DataFrame({
-                    'col': pd.array(["a", "b", "c", "a"], dtype="category")
+                    'col': pd.array(["a", "b", "c", "a", pd.NA], dtype="category")
                 }), 'col'),
             right=pd.DataFrame({
-                'col': pd.array(["a", "b", "c", "a"], dtype="category"),
-                'col_a': pd.array((1, 0, 0, 1), dtype=np.uint8),
-                'col_b': pd.array((0, 1, 0, 0), dtype=np.uint8),
-                'col_c': pd.array((0, 0, 1, 0), dtype=np.uint8)
+                'col': pd.array(["a", "b", "c", "a", pd.NA], dtype="category"),
+                'col_a': pd.array((1, 0, 0, 1, 0), dtype=np.uint8),
+                'col_b': pd.array((0, 1, 0, 0, 0), dtype=np.uint8),
+                'col_c': pd.array((0, 0, 1, 0, 0), dtype=np.uint8)
             })
         )
 
@@ -850,11 +952,11 @@ class TestOnehot:
         pd.testing.assert_frame_equal(
             left=dc.onehot_encode(
                 pd.DataFrame({
-                    'col': pd.array([True, False], dtype="boolean")
+                    'col': pd.array([True, False, pd.NA], dtype="boolean")
                 }), 'col'),
             right=pd.DataFrame({
-                'col': pd.array([True, False], dtype="boolean"),
-                'col_False': pd.array((0, 1), dtype=np.uint8),
-                'col_True': pd.array((1, 0), dtype=np.uint8)
+                'col': pd.array([True, False, pd.NA], dtype="boolean"),
+                'col_False': pd.array((0, 1, 0), dtype=np.uint8),
+                'col_True': pd.array((1, 0, 0), dtype=np.uint8)
             })
         )

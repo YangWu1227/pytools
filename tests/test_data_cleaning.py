@@ -641,7 +641,7 @@ class TestLikert:
 
     def test_likert_encode(self, test_data, mapping, csv_file):
         """
-        Test that liker_encode returns correct output given a set of inputs.
+        Test that likert_encode returns correct output given a set of inputs.
         """
 
         # --------------------------------- Base case -------------------------------- #
@@ -771,6 +771,11 @@ class TestOnehot:
             dc.onehot_encode(test_data, cols=(True, False))
 
         # -------------------------- Tests for functionality ------------------------- #
+
+    def test_onehot_encode(self, test_data):
+        """
+        Test that onehot_encode returns correct output given a set of inputs.
+        """
 
         # --------------------------------- Base case -------------------------------- #
 

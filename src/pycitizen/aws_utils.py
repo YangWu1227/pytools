@@ -46,7 +46,7 @@ def _max_len_tbl(df: pd.DataFrame) -> pd.DataFrame:
     # There may be so mixed type 'object' columns remaining that are really numeric columns
     df = df.select_dtypes(include=object)
     # The implementation below requires that missing values are represented as np.NaN rather than None
-    # Now the mixed type 'object' columns with pd.None or pd.NA representing missing numeric values should become numeric types
+    # Now any mixed type 'object' columns with pd.None or pd.NA representing missing numeric values should become numeric types
     df_obj = df.replace(to_replace={None: np.NaN}, inplace=False)
     # Create a frame containing max string length for each object column
     max_len_frame = (pd.DataFrame(df_obj.select_dtypes(include=object)
@@ -107,7 +107,7 @@ def create_statement(df: pd.DataFrame, tbl_name: str, primary_key: str) -> str:
     """
     This function generates a single CREATE TABLE statement given a data frame and a table name. The CREATE
     TABLE statement is used to stage a shell of a table into which data will be copied either from S3 or directly
-    from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64 bits), `Int64` (nullable integer),
+    from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64 bits), `Int` (nullable integer),
     `float` (16, 32, 64, 128 bits), `datetime64` or `object` can be inferred. Note that columns with dtype `datetime64` will 
     be mapped to the `DATE` dtype in Redshift, which is different from `TIMESTAMP`. The experimental `StringDtype` extension 
     dtype for Pandas dataframes is not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes) 
@@ -694,7 +694,7 @@ class MyRedShift(object):
 
     def drop_tbl(self, tbl_names: Union[List[str], Tuple[str], str]) -> None:
         """
-        This function accepts a single table name or a sequence of table names, executing the `DROP TABLE` statement in the database.
+        This function accepts a single or a sequence of table names, executing the `DROP TABLE` statement in the database.
 
         Parameters
         ----------

@@ -370,6 +370,10 @@ def find_missing(df: pd.DataFrame, axis: Optional[int] = 0) -> pd.Series:
 
 
 class EncodeMap(object):
+    """
+    A class for mapping dictionary storage.
+    """
+
     def __init__(self, mapping: List[dict], data: Optional[pd.DataFrame] = None) -> None:
         self.data = data
         self.mapping = mapping
@@ -396,7 +400,7 @@ class EncodeMap(object):
 # ----------------------- Function for ordinal encoding ---------------------- #
 
 
-def likert_encode(df: pd.DataFrame, mapping: List[dict], mapping_path: Optional[str] = None, inplace: Optional[bool] = False):
+def likert_encode(df: pd.DataFrame, mapping: List[dict], mapping_path: Optional[str] = None, inplace: Optional[bool] = False) -> Union[pd.DataFrame, None]:
     """
     This function transforms specified columns using the likert scale, in which an integer vector is used to represent the classes of the categories in the columns. 
     The results of this transformation will be inaccurate if the columns contain misspellings or case inconsistencies in the categories. The `freq_tbl()` 
@@ -465,21 +469,21 @@ def likert_encode(df: pd.DataFrame, mapping: List[dict], mapping_path: Optional[
 # ------------------------- One-hot or dummy encoding ------------------------ #
 
 
-def onehot_encode(df, col):
+def onehot_encode(df: pd.DataFrame, cols: Union[List[str], Tuple[str], str]) -> pd.DataFrame:
     """
     Use this function to onehot (or dummy) transform categorical 
     features, producing one feature per category, each as a binary 
     indicator (0-1 allocation). Note: The results of this transformation will 
     be inaccurate if the columns contain misspellings and case inconsistencies. 
-    Always use case_convert() and/or correct_misspell() to address those issues
-    first and foremost. Post-transformation processing, such as reordering
-    the columns, can be carried out using the helper function relocate().
+    The `freq_tbl()` helper may be helpful for identifying the presence of 
+    such issues. Then, `case_convert()` and `correct_misspell()` may be 
+    useful in addressing those issues.
 
     Parameters
     ----------
     df : DataFrame
-    col : Sequence of str
-        A sequence of column names to be transformed.
+    col : Sequence of str or str
+        A single or sequence of column names to be transformed.
 
     Returns
     -------
@@ -489,34 +493,42 @@ def onehot_encode(df, col):
     Raises
     ------
     TypeError
-       The supplied columns must all be string columns.
+        The argument 'df' must be a DataFrame.
+    TypeError
+        The argument 'cols' must either be registered as a Sequence or a str object.
     """
-    # Create a copy
-    df = df.copy()
-    # Subset
-    subset = df[col]
-    # Check columns data types
-    if (not all(subset.apply(lambda x: x.dtype == object))):
-        raise TypeError("'col' must be a list of text columns")
+    # Be more restrictive with typing--- only act on DataFrames
+    if not (isinstance(df, pd.DataFrame)):
+        raise TypeError("'df' must be be a DataFrame")
+    # Check input
+    if not (is_sequence_str(cols)):
+        raise TypeError(
+            "'cols' must be a sequence like a list or tuple or a single string")
 
-    # Instantiate encoder
-    encoder = ce_OneHotEncoder(
-        return_df=True,
-        use_cat_names=True,
-        # This needs to be discussed
-        handle_unknown='error'
+    # Subset
+    subset = df[cols]
+    # Create prefixes
+    if isinstance(cols, str):
+        prefix = cols
+    else:
+        prefix = subset.columns.tolist()
+
+    # Transform
+    transformed_df = pd.get_dummies(
+        data=subset,
+        prefix=prefix,
+        dummy_na=True,
+        dtype=np.uint8
     )
-    # Fit and Transform
-    transformed_df = encoder.fit_transform(X=subset)
+
     # Column-bind to original data frame
-    new_transformed_df = pd.concat(
+    cbind_df = pd.concat(
         objs=[df, transformed_df],
         # Columns
-        axis=1,
-        copy=False
+        axis=1
     )
 
-    return new_transformed_df
+    return cbind_df
 
 # ------------------------- String-to-string encoding ------------------------ #
 

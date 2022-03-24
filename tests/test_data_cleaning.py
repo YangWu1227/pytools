@@ -800,66 +800,61 @@ class TestOnehot:
             right=pd.DataFrame({
                 'col': pd.array((2.1, 2.2, np.NaN), dtype='float'),
                 'col_2.1': pd.array((1, 0, 0), dtype=np.uint8),
-                'col_2.2': pd.array((0, 1, 0), dtype=np.uint8),
-                'col_nan': pd.array((0, 0, 1), dtype=np.uint8)
+                'col_2.2': pd.array((0, 1, 0), dtype=np.uint8)
             })
         )
 
-        # Nullable Integer with missing
+        # Integer
         pd.testing.assert_frame_equal(
             left=dc.onehot_encode(
                 pd.DataFrame({
-                    'col': pd.Series((1, 2, pd.NA), dtype='Int64')
+                    'col': pd.array((1, 2), dtype='Int64')
                 }), 'col'),
             right=pd.DataFrame({
-                'col': pd.array((1, 2, pd.NA), dtype='Int64'),
-                'col_1': pd.array((1, 0, 0), dtype=np.uint8),
-                'col_2': pd.array((0, 1, 0), dtype=np.uint8),
-                'col_nan': pd.array((0, 0, 1), dtype=np.uint8)
+                'col': pd.array((1, 2), dtype='Int64'),
+                'col_1': pd.array((1, 0), dtype=np.uint8),
+                'col_2': pd.array((0, 1), dtype=np.uint8)
             })
         )
 
-        # -------------------------- String and categorical -------------------------- #
+        # ------------------------------- Other dtypes ------------------------------- #
 
-        # String with missing
+        # String
         pd.testing.assert_frame_equal(
             left=dc.onehot_encode(
                 pd.DataFrame({
-                    'col': pd.array(('A', 'B', pd.NA), dtype='string')
+                    'col': pd.array(('A', 'B'), dtype='string')
                 }), 'col'),
             right=pd.DataFrame({
-                'col': pd.array(('A', 'B', pd.NA), dtype='string'),
-                'col_A': pd.array((1, 0, 0), dtype=np.uint8),
-                'col_B': pd.array((0, 1, 0), dtype=np.uint8),
-                'col_nan': pd.array((0, 0, 1), dtype=np.uint8)
+                'col': pd.array(('A', 'B'), dtype='string'),
+                'col_A': pd.array((1, 0), dtype=np.uint8),
+                'col_B': pd.array((0, 1), dtype=np.uint8)
             })
         )
 
-        # Categorical with missing
+        # Categorical
         pd.testing.assert_frame_equal(
             left=dc.onehot_encode(
                 pd.DataFrame({
-                    'col': pd.array(["a", "b", "c", "a", pd.NA], dtype="category")
+                    'col': pd.array(["a", "b", "c", "a"], dtype="category")
                 }), 'col'),
             right=pd.DataFrame({
-                'col': pd.array(["a", "b", "c", "a", pd.NA], dtype="category"),
-                'col_a': pd.array((1, 0, 0, 1, 0), dtype=np.uint8),
-                'col_b': pd.array((0, 1, 0, 0, 0), dtype=np.uint8),
-                'col_c': pd.array((0, 0, 1, 0, 0), dtype=np.uint8),
-                'col_nan': pd.array((0, 0, 0, 0, 1), dtype=np.uint8)
+                'col': pd.array(["a", "b", "c", "a"], dtype="category"),
+                'col_a': pd.array((1, 0, 0, 1), dtype=np.uint8),
+                'col_b': pd.array((0, 1, 0, 0), dtype=np.uint8),
+                'col_c': pd.array((0, 0, 1, 0), dtype=np.uint8)
             })
         )
 
-        # Boolean with missing
+        # Boolean
         pd.testing.assert_frame_equal(
             left=dc.onehot_encode(
                 pd.DataFrame({
-                    'col': pd.array([True, False, pd.NA], dtype="boolean")
+                    'col': pd.array([True, False], dtype="boolean")
                 }), 'col'),
             right=pd.DataFrame({
-                'col': pd.array([True, False, pd.NA], dtype="boolean"),
-                'col_False': pd.array((0, 1, 0), dtype=np.uint8),
-                'col_True': pd.array((1, 0, 0), dtype=np.uint8),
-                'col_nan': pd.array((0, 0, 1), dtype=np.uint8)
+                'col': pd.array([True, False], dtype="boolean"),
+                'col_False': pd.array((0, 1), dtype=np.uint8),
+                'col_True': pd.array((1, 0), dtype=np.uint8)
             })
         )

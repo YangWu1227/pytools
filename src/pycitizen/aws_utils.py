@@ -107,7 +107,7 @@ def create_statement(df: pd.DataFrame, tbl_name: str, primary_key: str) -> str:
     """
     This function generates a single CREATE TABLE statement given a data frame and a table name. The CREATE
     TABLE statement is used to stage a shell of a table into which data will be copied either from S3 or directly
-    from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64 bits), `Int` (nullable integer),
+    from pandas after cleaning. Currently, only columns with dtype `int` (8, 16, 32, 64 bits), `Int64` (nullable integer),
     `float` (16, 32, 64, 128 bits), `datetime64` or `object` can be inferred. Note that columns with dtype `datetime64` will 
     be mapped to the `DATE` dtype in Redshift, which is different from `TIMESTAMP`. The experimental `StringDtype` extension 
     dtype for Pandas dataframes is not currently implemented. See the Pandas [documentation](https://pandas.pydata.org/docs/user_guide/basics.html#basics-dtypes) 

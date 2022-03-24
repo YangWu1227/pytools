@@ -5,8 +5,6 @@
 import pandas as pd
 import numpy as np
 import datatable as dt
-from category_encoders import OrdinalEncoder as ce_OrdinalEncoder
-from category_encoders import OneHotEncoder as ce_OneHotEncoder
 
 # ----------------------------- Standard library ----------------------------- #
 

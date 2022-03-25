@@ -525,12 +525,147 @@ class TestFindMissing:
 
 
 # ---------------------------------------------------------------------------- #
-#                       Tests for Likert encode function                       #
+#                          Tests for relocate function                         #
+# ---------------------------------------------------------------------------- #
+
+class TestRelocate:
+    """
+    Tests for the relocate function.
+    """
+
+    # ------------------------ Tests for exceptions raised ----------------------- #
+
+    def test_relocate_errors(self, test_data):
+        """
+        Test that relocate raises exceptions when arguments are passed invalid inputs.
+        """
+
+        # For 'df', the place to error is getting the 'columns' object property
+        with pytest.raises(AttributeError):
+            dc.relocate(
+                {'col': pd.array((1, 2)), 'col1': pd.array((2, 4))},
+                to_move='col',
+                after='col1'
+            )
+        # Exceptions for 'to_move'
+        with pytest.raises(TypeError, match="'to_move' must be a sequence like a list or a single string"):
+            dc.relocate(
+                test_data,
+                # Cannot use integer index
+                to_move=2,
+                after='likert_encode'
+            )
+        # Keyword error if supplied a list of non-string objects
+        with pytest.raises(KeyError, match="not in index"):
+            dc.relocate(
+                test_data,
+                # A list of non-strings
+                to_move=[3, 2],
+                before='likert_encode'
+            )
+        # Keyword error if supplied a invalid column names
+        with pytest.raises(KeyError, match="not in index"):
+            dc.relocate(
+                test_data,
+                # Invalid columns name
+                to_move=['non-existent', 'case_convert'],
+                after='likert_encode'
+            )
+        # Exceptions for 'after' or 'before
+        with pytest.raises(TypeError, match="must supply only one of 'before' and 'after' as a string"):
+            dc.relocate(
+                test_data,
+                to_move=['case_convert', 'misspell'],
+                # Both specified
+                before='likert_encode',
+                after='str_encode'
+            )
+        with pytest.raises(TypeError, match="must supply only one of 'before' and 'after' as a string"):
+            dc.relocate(
+                test_data,
+                # Both 'after' and 'before are None
+                to_move=['case_convert', 'misspell']
+            )
+        # Wrong input for either 'before' or 'after'
+        with pytest.raises(TypeError, match="must supply only one of 'before' and 'after' as a string"):
+            dc.relocate(
+                test_data,
+                to_move=['case_convert', 'misspell'],
+                after=True
+            )
+        with pytest.raises(TypeError, match="must supply only one of 'before' and 'after' as a string"):
+            dc.relocate(
+                test_data,
+                to_move=['case_convert', 'misspell'],
+                before=[False, True]
+            )
+
+    # -------------------------- Tests for functionality ------------------------- #
+
+    @pytest.mark.parametrize(
+        "to_move, before, after, result",
+        [
+            # List of columns
+            (['onehot_encode', 'misspell'], 'likert_encode', None, ['onehot_encode',
+                                                                    'misspell',
+                                                                    'likert_encode',
+                                                                    'str_encode',
+                                                                    'case_convert',
+                                                                    'invalid_case_convert']),
+            # Single column
+            ('onehot_encode', None, 'likert_encode', ['likert_encode',
+                                                      'onehot_encode',
+                                                      'str_encode',
+                                                      'case_convert',
+                                                      'misspell',
+                                                      'invalid_case_convert']),
+            # Columns to move contain reference columns should simply move other columns
+            (['onehot_encode', 'misspell', 'case_convert'], None, 'case_convert', ['likert_encode',
+                                                                                   'str_encode',
+                                                                                   'case_convert',
+                                                                                   'onehot_encode',
+                                                                                   'misspell',
+                                                                                   'invalid_case_convert']),
+            (['onehot_encode', 'misspell', 'case_convert'], 'case_convert', None, ['likert_encode',
+                                                                                   'str_encode',
+                                                                                   'onehot_encode',
+                                                                                   'misspell',
+                                                                                   'case_convert',
+                                                                                   'invalid_case_convert']),
+            # Edge case where one of 'before' and 'after' is correctly specified as string but the other an invalid input
+            # The expected behavior is that whichever one is correctly specified should be the reference column and the other ignored
+            ('onehot_encode', True, 'case_convert', ['likert_encode',
+                                                     'str_encode',
+                                                     'case_convert',
+                                                     'onehot_encode',
+                                                     'misspell',
+                                                     'invalid_case_convert']),
+            ('onehot_encode', 'case_convert', 3, ['likert_encode',
+                                                  'str_encode',
+                                                  'onehot_encode',
+                                                  'case_convert',
+                                                  'misspell',
+                                                  'invalid_case_convert'])
+        ],
+        scope='function'
+    )
+    def test_relocate(self, test_data, to_move, before, after, result):
+        """
+        Test that relocate returns expected results given inputs with branches.
+        """
+
+        # Tests
+        assert dc.relocate(test_data, to_move, before,
+                           after).columns.tolist() == result
+
+# ---------------------------------------------------------------------------- #
+#                           Tests for Encode function                          #
 # ---------------------------------------------------------------------------- #
 
 # ---------------------------- Fixture for mapping --------------------------- #
 
-@pytest.fixture(scope='class')
+
+@ pytest.fixture(scope='class')
 def mapping():
     return [
         {
@@ -555,7 +690,7 @@ def mapping():
 # ---------------------- Fixture for temporary csv file ---------------------- #
 
 
-@pytest.fixture(scope="session")
+@ pytest.fixture(scope="session")
 def csv_file(tmpdir_factory):
     path = tmpdir_factory.mktemp("data").join("dict.csv")
     return path

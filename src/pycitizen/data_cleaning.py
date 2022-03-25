@@ -26,7 +26,11 @@ from pycitizen.exceptions import (ColumnDtypeInferError,
                                   InvalidColumnDtypeError,
                                   InvalidMappingKeys,
                                   InvalidMappingValues)
-from pycitizen.utils import is_sequence, is_sequence_str, is_string, is_encode_map
+from pycitizen.utils import (is_sequence,
+                             is_sequence_str,
+                             is_list_str,
+                             is_string,
+                             is_encode_map)
 
 # ---------------------------------------------------------------------------- #
 #                               Cleaning helpers                               #
@@ -362,6 +366,90 @@ def find_missing(df: pd.DataFrame, axis: Optional[int] = 0) -> pd.Series:
     else:
         raise ValueError("'axis' must either be 1 (rows) or 0 (columns)")
 
+# ---------------- Function to relocate columns in a DataFrame --------------- #
+
+
+def relocate(df: pd.DataFrame,
+             to_move: Union[List[str], str],
+             before: Union[str, None] = None,
+             after: Union[str, None] = None) -> pd.DataFrame:
+    """
+    This function reorders the columns in a DataFrame based on a reference column, which is either 
+    specified as `before` or `after`. Only one of 'before' and 'after' should be supplied as a string.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+    to_move : str or list of str 
+        A single or a list of column names to relocate.
+    before : str or None, optional
+        A reference column before which the columns in 'to_move' should be relocated, by default None.
+    after : str or None, optional
+        A reference column after which the columns in 'to_move' should be relocated, by default None.
+
+    Returns
+    -------
+    DataFrame
+        A DataFrame with reordered columns.
+
+    Raises
+    ------
+    TypeError
+        The argument 'to_move' must either be a list or a single string.
+    TypeError
+        Must supply only one of 'before' and 'after' as a string.
+    """
+    # Check input
+    if not is_list_str(to_move):
+        raise TypeError(
+            "'to_move' must be a sequence like a list or a single string")
+    # Exclusive or (exclusive disjunction where this true if and only if the two booleans differ (one is true, the other is false))
+    if isinstance(before, str) == isinstance(after, str):
+        raise TypeError(
+            "must supply only one of 'before' and 'after' as a string")
+
+    # If to_move is a string
+    if isinstance(to_move, str):
+        # Strings are immutable so this creates a new object that 'to_move' references
+        to_move = [to_move]
+
+    # If the reference column is included in 'to_move', remove it
+    if before in to_move:
+        to_move.remove(before)
+    elif after in to_move:
+        to_move.remove(after)
+
+    # List of all column names
+    cols = df.columns.tolist()
+
+    # If we wish to move cols before the reference column
+    if isinstance(before, str):
+        # Select columns before the reference column (not including the reference column)
+        seg1 = cols[:cols.index(before)]
+        # Segment 2 includes columns to move 'before' the reference column
+        to_move.append(before)
+        seg2 = to_move
+
+    # If we wish to move cols after the reference column
+    if isinstance(after, str):
+        # Select columns before the reference column (including the reference column)
+        seg1 = cols[:cols.index(after) + 1]
+        # Segment 2 simply includes columns to move
+        seg2 = to_move
+
+    # In either case, 'before' or 'after', we need to ensure columns to move are not in segment 1 (that is, drop 'to_move' from their original positions)
+    # Segment 2 in either case should always include columns to move
+    seg1 = [col for col in seg1 if col not in seg2]
+    # Finally, select the rest of the columns--- those that are not in seg1 and seg2
+    seg3 = [col for col in cols if col not in seg1 + seg2]
+
+    # For 'before', seg2 includes columns to move plus the reference column
+    # Thus, seg2 created from the 'before' branch ensures that columns to move will appear 'before' the reference column
+    # For 'after', adding seg1 (with reference column) + seg2 (to_move) in this order ensures that columns to move will appear 'after' the reference column
+    # Finally, seg3 adds the rest of the columns to the end
+    return df[seg1 + seg2 + seg3]
+
+
 # ---------------------------------------------------------------------------- #
 #       Persistent storage and standard operating procedure for cleaning       #
 # ---------------------------------------------------------------------------- #
@@ -369,7 +457,7 @@ def find_missing(df: pd.DataFrame, axis: Optional[int] = 0) -> pd.Series:
 
 class EncodeMap(object):
     """
-    A class for mapping dictionary storage.
+    A class for mapping dictionary storage and cleaning standard operating procedure.
     """
 
     def __init__(self, mapping: List[dict], data: Optional[pd.DataFrame] = None) -> None:

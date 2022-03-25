@@ -50,6 +50,23 @@ def is_sequence_str(seq: Sequence) -> bool:
     """
     return isinstance(seq, Sequence) and not isinstance(seq, (ByteString, range))
 
+
+def is_list_str(seq: Sequence) -> bool:
+    """
+    This helper returns `True` if the input is either a list or a string.
+
+    Parameters
+    ----------
+    seq : Sequence of objects
+        An input sequence to be tested.
+
+    Returns
+    -------
+    bool
+        `True` if the sequence is either a list or a string..
+    """
+    return isinstance(seq, list) or isinstance(seq, str)
+
 # ----------------------------- Helper for pandas ---------------------------- #
 
 

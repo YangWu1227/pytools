@@ -1,9 +1,19 @@
+# ---------------------------------------------------------------------------- #
+#                           Load packages and modules                          #
+# ---------------------------------------------------------------------------- #
+
 import psycopg2 as py
-import pycitizen.aws_utils as au
-from pycitizen.exceptions import ColumnDtypeInferError
 import pandas as pd
 import numpy as np
+
+# ----------------------------- Standard library ----------------------------- #
+
 import os
+
+# ------------------------------- Intra-package ------------------------------ #
+
+import pycitizen.aws_utils as au
+from pycitizen.exceptions import ColumnDtypeInferError
 
 if __name__ == '__main__':
 

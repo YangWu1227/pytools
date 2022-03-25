@@ -511,10 +511,25 @@ class TestAwsCreds:
 
 
 # ---------------------------------------------------------------------------- #
+#                         Tests for get_creds function                         #
+# ---------------------------------------------------------------------------- #
+
+def test_get_creds():
+    """
+    Test that get_creds returns expected results given valid path to credentials.
+    """
+
+    assert isinstance(au.get_creds('tests/test_aws_creds.csv'), tuple)
+    assert au.get_creds(
+        'tests/test_aws_creds.csv') == ('test_access', 'test_secret')
+
+
+# ---------------------------------------------------------------------------- #
 #                   Tests for database interaction functions                   #
 # ---------------------------------------------------------------------------- #
 
 # --------------------------- Create table commands -------------------------- #
+
 
 @pytest.fixture(scope='function')
 def create_commands():

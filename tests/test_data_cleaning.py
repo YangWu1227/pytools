@@ -133,10 +133,13 @@ class TestFreqTable:
         """
 
         # Unique error messages due to polymorphism
-        with pytest.raises(AttributeError, match="object has no attribute 'select_dtypes'"):
+        # The first place to error if 'df' is passed invalid object is the columns attribute
+        with pytest.raises(AttributeError, match="object has no attribute 'columns'"):
             dc.freq_tbl(pd.Series(('A', 'B')), False)
+        # When 'dropna' is passed an invalid object whose boolean value is ambiguous
         with pytest.raises(TypeError, match='boolean value of NA is ambiguous'):
             dc.freq_tbl(pd.DataFrame({'col': ("A", "B", "A")}), pd.NA)
+        # Sometimes 'dropna' may also result in value errors
         with pytest.raises(ValueError):
             dc.freq_tbl(pd.DataFrame(
                 {'col': ("A", "B", "A")}), pd.Series(('A', 'B')))
@@ -175,12 +178,13 @@ class TestFreqTable:
         # Outputs
         tbls = dc.freq_tbl(test_data, dropna=True,
                            sort=sort, normalize=normalize)
+        # Exclude 'invalid_case_convert' from tests
         tbls_true_false = dc.freq_tbl(test_data, dropna=True,
-                                      sort=True, normalize=False)
+                                      sort=True, normalize=False)[0:5]
         tbls_false_true = dc.freq_tbl(test_data, dropna=True,
-                                      sort=False, normalize=True)
+                                      sort=False, normalize=True)[0:5]
 
-        # Expected for two branches
+        # Expected for two of the four branches
         expected_index = {
             # Sort=True
             'sort_true': (
@@ -222,9 +226,9 @@ class TestFreqTable:
         assert isinstance(tbls, tuple) == True
         # Check '_fileds' attributes match test data string columns names
         assert tbls._fields == (
-            'likert_encode', 'str_encode', 'onehot_encode', 'case_convert', 'misspell')
+            'likert_encode', 'str_encode', 'onehot_encode', 'case_convert', 'misspell', 'invalid_case_convert')
         # Check length
-        assert len(tbls) == 5
+        assert len(tbls) == 6
 
         # Branch (sort=True and normalize=False)
         for num, tbl in enumerate(tbls_true_false):

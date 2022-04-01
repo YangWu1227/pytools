@@ -159,8 +159,9 @@ def freq_tbl(df: pd.DataFrame, dropna: Optional[bool] = False, **kwargs: str) ->
     if not all((kwarg in ('normalize', 'sort', 'ascending') for kwarg in kwargs.keys())):
         raise ValueError(
             "Only 'normalize', 'sort', and 'ascending' are supported as extra keyword arguments")
-    # Keep only text columns (including mixed type with 'object' dtype)
-    df = df.select_dtypes(exclude=np.number)
+    # Obtain number of unique values for each column in 'df'
+    # Only use columns where cardinality is relatively low (< 25)
+    df = df.loc[:, [col for col in df.columns if len(df[col].unique()) < 25]]
     # Generator of frequency tables
     gen_of_freq = (pd.DataFrame(df[col].value_counts(dropna=dropna, **kwargs))
                    for col in df.columns)

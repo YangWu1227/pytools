@@ -132,9 +132,9 @@ def clean_col_nms(df: pd.DataFrame, inplace: Optional[bool] = False) -> Union[pd
 # -------------- Function to create a tuple of frequency tables -------------- #
 
 
-def freq_tbl(df: pd.DataFrame, dropna: Optional[bool] = False, **kwargs: str) -> NamedTuple:
+def freq_tbl(df: pd.DataFrame, dropna: Optional[bool] = False, cardinality: Optional[int] = 20, **kwargs: str) -> NamedTuple:
     """
-    This function creates a sequence of freqency tables of the text fields in a DataFrame,
+    This function creates a sequence of freqency tables of the fields in a DataFrame,
     which can be examined to identify misspellings and case inconsistencies. You may pass 
     extra keyword arguments for the underlying pandas function. See `?pandas.DataFrame.value_counts`
     for options (note that the `subset` argument is not permitted). 
@@ -144,6 +144,8 @@ def freq_tbl(df: pd.DataFrame, dropna: Optional[bool] = False, **kwargs: str) ->
     df : DataFrame
     dropna : bool, optional
         Whether to drop missing values, by default False.
+    cardinality : int, optional
+        Cardinality limit for the fields in the input DataFrame for filtering out high cardinal fields, by default 20.
 
     Returns
     -------
@@ -154,14 +156,20 @@ def freq_tbl(df: pd.DataFrame, dropna: Optional[bool] = False, **kwargs: str) ->
     ------
     ValueError
         Only 'normalize', 'sort', 'ascending' are supported as extra keyword arguments.
+    TypeError
+        The argument 'cardinality' must be an integer.
     """
     # Check keyword args
     if not all((kwarg in ('normalize', 'sort', 'ascending') for kwarg in kwargs.keys())):
         raise ValueError(
             "Only 'normalize', 'sort', and 'ascending' are supported as extra keyword arguments")
+    # Check input
+    if not isinstance(cardinality, int):
+        raise TypeError("'cardinality' must be an integer")
     # Obtain number of unique values for each column in 'df'
-    # Only use columns where cardinality is relatively low (< 25)
-    df = df.loc[:, [col for col in df.columns if len(df[col].unique()) < 25]]
+    # Only use columns where cardinality is relatively low (defaults to 25)
+    df = df.loc[:, [col for col in df.columns if len(
+        df[col].unique()) <= cardinality]]
     # Generator of frequency tables
     gen_of_freq = (pd.DataFrame(df[col].value_counts(dropna=dropna, **kwargs))
                    for col in df.columns)

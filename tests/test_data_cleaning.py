@@ -143,6 +143,13 @@ class TestFreqTable:
         with pytest.raises(ValueError):
             dc.freq_tbl(pd.DataFrame(
                 {'col': ("A", "B", "A")}), pd.Series(('A', 'B')))
+        # Invalid input for 'cardinality' will raise a type error
+        with pytest.raises(TypeError, match="'cardinality' must be an integer"):
+            dc.freq_tbl(pd.DataFrame(
+                {'col': ("A", "B", "A")}), False, 'non-integer')
+        with pytest.raises(TypeError, match="'cardinality' must be an integer"):
+            dc.freq_tbl(pd.DataFrame(
+                {'col': ("A", "B", "A")}), False, 3.22)
 
     @pytest.mark.parametrize(
         "df, dropna",
@@ -178,11 +185,11 @@ class TestFreqTable:
         # Outputs
         tbls = dc.freq_tbl(test_data, dropna=True,
                            sort=sort, normalize=normalize)
-        # Exclude 'invalid_case_convert' from tests
-        tbls_true_false = dc.freq_tbl(test_data, dropna=True,
-                                      sort=True, normalize=False)[0:5]
-        tbls_false_true = dc.freq_tbl(test_data, dropna=True,
-                                      sort=False, normalize=True)[0:5]
+        # Exclude 'invalid_case_convert' (0 - 10 integers) from tests by setting cardinality to 5
+        tbls_true_false = dc.freq_tbl(
+            test_data, dropna=True, cardinality=6, sort=True, normalize=False)
+        tbls_false_true = dc.freq_tbl(
+            test_data, dropna=True, cardinality=6, sort=False, normalize=True)
 
         # Expected for two of the four branches
         expected_index = {
@@ -222,6 +229,8 @@ class TestFreqTable:
             ]
         }
 
+        # ------------- The overall test includes 'invalid_case_convert' ------------- #
+
         # Tuple
         assert isinstance(tbls, tuple) == True
         # Check '_fileds' attributes match test data string columns names
@@ -229,6 +238,8 @@ class TestFreqTable:
             'likert_encode', 'str_encode', 'onehot_encode', 'case_convert', 'misspell', 'invalid_case_convert')
         # Check length
         assert len(tbls) == 6
+
+        # ------------- The branch tests excludes 'invalid_case_convert' ------------- #
 
         # Branch (sort=True and normalize=False)
         for num, tbl in enumerate(tbls_true_false):

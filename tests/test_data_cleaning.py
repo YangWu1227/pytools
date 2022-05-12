@@ -2,8 +2,6 @@
 #                           Load packages and modules                          #
 # ---------------------------------------------------------------------------- #
 
-from io import StringIO
-from turtle import right
 import pandas as pd
 import numpy as np
 import pytest
@@ -11,15 +9,12 @@ import pytest
 # ----------------------------- Standard library ----------------------------- #
 
 import os
-from io import StringIO
 from re import escape
-from collections import namedtuple
 
 # ------------------------------- Intra-package ------------------------------ #
 
 import pycitizen.data_cleaning as dc
-from pycitizen.exceptions import (ColumnDtypeInferError,
-                                  ColumnNameKeyWordError,
+from pycitizen.exceptions import (ColumnNameKeyWordError,
                                   ColumnNameStartWithDigitError,
                                   InvalidIdentifierError,
                                   InvalidColumnDtypeError,
@@ -114,6 +109,286 @@ class TestColumnNmsHelpers:
         assert dc.clean_col_nms(
             check_col_nms_test_df[6]).columns.tolist() == ['trailing_leading']
 
+        # --------------------------- Test modify in place --------------------------- #
+
+        copied_data = [frame.copy() for frame in check_col_nms_test_df]
+
+        # Digits '123col' become 'col' since leading characters are moved until a letter is matched
+        dc.clean_col_nms(copied_data[1], inplace=True)
+        assert copied_data[1].columns.tolist() == ['col']
+        # Digit and special character are removed from '^3edf'
+        dc.clean_col_nms(copied_data[3], inplace=True)
+        assert copied_data[3].columns.tolist() == ['edf']
+        # White spaces and special characters are removed from 'price ($)' and 'percent%'
+        dc.clean_col_nms(copied_data[4], inplace=True)
+        assert copied_data[4].columns.tolist() == ['price']
+        dc.clean_col_nms(copied_data[5], inplace=True)
+        assert copied_data[5].columns.tolist() == ['percent']
+        # Leading and trailing white spaces are removed first, then while spaces in between are replace with '_'
+        dc.clean_col_nms(copied_data[6], inplace=True)
+        assert copied_data[6].columns.tolist() == ['trailing_leading']
+
+
+# ---------------------------------------------------------------------------- #
+#                        Tests for case_convert function                       #
+# ---------------------------------------------------------------------------- #
+
+
+class TestCaseConvert:
+    """
+    Tests for the case_convert helper function.
+    """
+
+    # --------------------- Tests that exceptions are raised --------------------- #
+
+    def test_case_convert_errors(self, test_data):
+        """
+        Tests that case_convert raises exceptions when 'df', 'cols' and 'to' are passed invalid inputs.
+        """
+
+        # Invalid input for 'df', which creates unique error messages due to polymorphism
+        with pytest.raises(AttributeError, match="no attribute 'columns'"):
+            dc.case_convert(df=pd.Series(('Upper', 'lower', 'case')))
+        with pytest.raises(AttributeError, match="no attribute 'columns'"):
+            dc.case_convert(df=['Upper', 'Word'])
+        with pytest.raises(AttributeError, match="no attribute 'copy'"):
+            dc.case_convert(df=('str', ))
+
+        # Range offset for 'cols'
+        with pytest.raises(TypeError, match="'cols' must be a sequence like a list or a single string"):
+            dc.case_convert(df=test_data, cols=range(0, 3))
+
+        # Invalid inputs for 'to'
+        # Numeric
+        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
+            dc.case_convert(df=test_data, cols='case_convert', to=3)
+        # Boolean
+        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
+            dc.case_convert(df=test_data, cols='case_convert', to=True)
+        # List
+        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
+            dc.case_convert(df=test_data, cols='case_convert',
+                            to=['lower', 'upper'])
+        # Single element tuple
+        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
+            dc.case_convert(
+                df=test_data, cols='case_convert', to=('lower', ))
+
+    # ------------------- Tests that custom exception is raised ------------------ #
+
+    def test_case_convert_custom_error(self, test_data):
+        """
+        Test that when user passes non 'string' columns in 'cols' the function raises InvalidColumnDtypeError.
+        """
+
+        with pytest.raises(InvalidColumnDtypeError, match=escape("Columns ['invalid_case_convert'] are invalid as dtype 'string' is expected")):
+            dc.case_convert(
+                test_data, ['invalid_case_convert', 'case_convert'])
+
+    # -------------------------- Tests for functionality ------------------------- #
+
+    @pytest.mark.parametrize(
+        "cols, to",
+        [
+            # No user supplied columns
+            (None, 'lower'),
+            (None, 'upper'),
+            (None, 'title'),
+            (None, 'capitalize'),
+            # User supplied columns
+            ('case_convert', 'lower'),
+            (['case_convert', 'str_encode'], 'upper'),
+            (['misspell', 'case_convert'], 'title'),
+            ('misspell', 'capitalize')
+        ],
+        scope='function'
+    )
+    def test_case_convert(self, test_data, cols, to):
+        """
+        Test that case_convert returns expected results given inputs with branches.
+        """
+
+        # Test all combination of parameters in the fixture above
+        type(dc.case_convert(test_data, cols=cols, to=to)) == type(pd.DataFrame())
+
+    def test_case_convert_branch(self, test_data):
+        """
+        Branch tests for case_convert of three possible combinations of 'cols' and 'to', including one where inplace=True. 
+        """
+        # Test two branches
+        branch1 = dc.case_convert(test_data, cols=None, to='lower')
+        branch2 = dc.case_convert(
+            test_data, cols=['case_convert', 'str_encode'], to='upper')
+
+        # Branch 1
+        pd.testing.assert_frame_equal(
+            left=branch1,
+            right=pd.DataFrame({
+                'likert_encode': ('a', 'a', 'b', 'c', 'd', 'd', 'c', pd.NA, 'c', 'e'),
+                'str_encode': ('bachelor', 'highschool', pd.NA, 'grad', 'grad', pd.NA, 'highschool', 'college', 'college', 'bachelor'),
+                'onehot_encode': ('a',) * 5 + ('b',) * 5,
+                'case_convert': ('upper',) * 5 + ('lower',) * 3 + (pd.NA, pd.NA),
+                'misspell': ('republican',) * 4 + ('repulican',) + ('democrat',) * 3 + ('democract',) * 2,
+                'invalid_case_convert': tuple(range(0, 10))
+            })
+        )
+
+        # Branch 2
+        pd.testing.assert_frame_equal(
+            left=branch2,
+            right=pd.DataFrame({
+                'likert_encode': ('A', 'A', 'B', 'C', 'D', 'D', 'C', pd.NA, 'C', 'E'),
+                'str_encode': ('BACHELOR', 'HIGHSCHOOL', pd.NA, 'GRAD', 'GRAD', pd.NA, 'HIGHSCHOOL', 'COLLEGE', 'COLLEGE', 'BACHELOR'),
+                'onehot_encode': ('A',) * 5 + ('B',) * 5,
+                'case_convert': ('UPPER',) * 5 + ('LOWER',) * 3 + (pd.NA, pd.NA),
+                'misspell': ('republican',) * 4 + ('repulican',) + ('democrat',) * 3 + ('democract',) * 2,
+                'invalid_case_convert': tuple(range(0, 10))
+            })
+        )
+
+        # ------------------- Branch 3 (modify test data in place) ------------------- #
+
+        copied_test_data = test_data.copy()
+        # No assignment
+        dc.case_convert(copied_test_data, cols=['str_encode', 'misspell'],
+                        to='title', inplace=True)
+
+        # Test data should be modified
+        pd.testing.assert_frame_equal(
+            left=copied_test_data,
+            right=pd.DataFrame({
+                'likert_encode': ('A', 'A', 'B', 'C', 'D', 'D', 'C', pd.NA, 'C', 'E'),
+                'str_encode': ('Bachelor', 'Highschool', pd.NA, 'Grad', 'Grad', pd.NA, 'Highschool', 'College', 'College', 'Bachelor'),
+                'onehot_encode': ('A',) * 5 + ('B',) * 5,
+                'case_convert': ('Upper',) * 5 + ('lower',) * 3 + (pd.NA, pd.NA),
+                'misspell': ('Republican',) * 4 + ('Repulican',) + ('Democrat',) * 3 + ('Democract',) * 2,
+                'invalid_case_convert': tuple(range(0, 10))
+            })
+        )
+
+
+# ---------------------------------------------------------------------------- #
+#                      Tests for correct_misspell function                     #
+# ---------------------------------------------------------------------------- #
+
+
+class TestMisspell:
+    """
+    Tests for the correct_misspell helper function.
+    """
+
+    # ------------------------ Tests for exceptions raised ----------------------- #
+
+    def test_correct_misspell_errors(self, test_data):
+        """
+        Tests that correct_misspell raises exceptions when 'df', 'cols' and 'mapping' are passed invalid inputs.
+        """
+
+        # Invalid input for 'df', which creates unique error messages due to polymorphism, but usually AttributeError or KeyError
+        # First place that may raise an exception is the '.copy' method
+        # The second place is keyword when subsetting df[cols] or df[col]
+        with pytest.raises(AttributeError):
+            dc.correct_misspell((1, 2, 3), cols='misspell',
+                                mapping={'democract': 'democrat'})
+        with pytest.raises(KeyError):
+            dc.correct_misspell(pd.Series(
+                ['misspell', 'correct_spell']), cols='misspell', mapping={'democract': 'democrat'})
+
+        # Range offset for 'cols'
+        with pytest.raises(TypeError, match="'cols' must be a sequence like a list or a single string"):
+            dc.correct_misspell(df=test_data, cols=range(
+                0, 3), mapping={'democract': 'democrat'})
+        # Supplying unknown cols should return KeyErrors (handled by pandas)
+        with pytest.raises(KeyError):
+            dc.correct_misspell(df=test_data, cols='does_not_exist', mapping={
+                                'democract': 'democrat'})
+        with pytest.raises(KeyError):
+            dc.correct_misspell(df=test_data, cols=['misspell', 'does_not_exist2'], mapping={
+                                'democract': 'democrat'})
+
+        # Invalid inputs for 'mapping'
+        # Invalid types
+        with pytest.raises(TypeError, match="The argument 'mapping' must be a dictionary object"):
+            dc.correct_misspell(df=test_data, cols=[
+                                'misspell'], mapping=['str'])
+
+    # ------------------- Tests that custom exception is raised ------------------ #
+
+    def test_correct_misspell_custom_error(self, test_data):
+        """
+        Test that when user passes non 'string' columns in 'cols' the function raises InvalidColumnDtypeError.
+        """
+
+        with pytest.raises(InvalidColumnDtypeError, match=escape("Columns ['invalid_case_convert'] are invalid as dtype 'string' is expected")):
+            dc.correct_misspell(df=test_data, cols=[
+                                'misspell', 'invalid_case_convert'], mapping={'democract': 'democrat'})
+
+    # -------------------------- Tests for functionality ------------------------- #
+
+    @pytest.mark.parametrize(
+        "cols, mapping",
+        [
+            # Single str
+            ['misspell', {'repulican': 'republican',
+                          'democract': 'democrat'}],
+            # Sequence of str
+            [['misspell', 'case_convert'], {'Upper': 'Changed'}]
+        ],
+        scope='function'
+    )
+    def test_correct_misspell(self, test_data, cols, mapping):
+        """
+        Test that correct_misspell returns expected results given inputs with branches.
+        """
+
+        # Test types
+        type(dc.correct_misspell(df=test_data, cols=cols,
+             mapping=mapping)) == type(pd.DataFrame())
+
+    def test_correct_misspell_branch(self, test_data):
+        """
+        Branch tests for correct_misspell for different inputs for 'cols', plus inplace=True.
+        """
+        # Single str branch
+        pd.testing.assert_frame_equal(
+            # Extract the single column for the test and cast to dataframe
+            left=pd.DataFrame(
+                dc.correct_misspell(df=test_data, cols='misspell', mapping={
+                    'repulican': 'republican', 'democract': 'democrat'}).misspell
+            ),
+            right=pd.DataFrame(
+                {'misspell': ('republican',) * 5 + ('democrat',) * 5}
+            )
+        )
+
+        # Sequence of str
+        pd.testing.assert_frame_equal(
+            # Extract the single column for the test and cast to dataframe
+            left=pd.DataFrame(
+                dc.correct_misspell(df=test_data, cols=['misspell', 'case_convert'], mapping={
+                                    'Upper': 'Changed'}).case_convert
+            ),
+            right=pd.DataFrame(
+                {'case_convert': ('Changed',) * 5 + ('lower',)
+                 * 3 + (pd.NA, pd.NA)}
+            )
+        )
+
+        # ----------------------------- Set inplace=True ----------------------------- #
+
+        copied_test_data = test_data.copy()
+        dc.correct_misspell(df=copied_test_data, cols=[
+                            'misspell', 'case_convert'], mapping={'Upper': 'Changed'}, inplace=True)
+
+        pd.testing.assert_frame_equal(
+            # Extract the single column for the test and cast to dataframe
+            left=pd.DataFrame(copied_test_data.case_convert),
+            right=pd.DataFrame(
+                {'case_convert': ('Changed',) * 5 + ('lower',)
+                 * 3 + (pd.NA, pd.NA)}
+            )
+        )
+
 
 # ---------------------------------------------------------------------------- #
 #                          Tests for freq_tbl function                         #
@@ -185,6 +460,22 @@ class TestFreqTable:
         # Outputs
         tbls = dc.freq_tbl(test_data, dropna=True,
                            sort=sort, normalize=normalize)
+
+        # ------------- The overall test includes 'invalid_case_convert' ------------- #
+
+        # Tuple
+        assert isinstance(tbls, tuple) == True
+        # Check '_fileds' attributes match test data string columns names
+        assert tbls._fields == (
+            'likert_encode', 'str_encode', 'onehot_encode', 'case_convert', 'misspell', 'invalid_case_convert')
+        # Check length
+        assert len(tbls) == 6
+
+    def test_freq_tbl_branch(self, test_data):
+        """
+        Branch tests for freq_tbl and two combinations of 'sort' and 'normalize' parameters.
+        """
+
         # Exclude 'invalid_case_convert' (0 - 10 integers) from tests by setting cardinality to 5
         tbls_true_false = dc.freq_tbl(
             test_data, dropna=True, cardinality=6, sort=True, normalize=False)
@@ -229,16 +520,6 @@ class TestFreqTable:
             ]
         }
 
-        # ------------- The overall test includes 'invalid_case_convert' ------------- #
-
-        # Tuple
-        assert isinstance(tbls, tuple) == True
-        # Check '_fileds' attributes match test data string columns names
-        assert tbls._fields == (
-            'likert_encode', 'str_encode', 'onehot_encode', 'case_convert', 'misspell', 'invalid_case_convert')
-        # Check length
-        assert len(tbls) == 6
-
         # ------------- The branch tests excludes 'invalid_case_convert' ------------- #
 
         # Branch (sort=True and normalize=False)
@@ -252,235 +533,6 @@ class TestFreqTable:
             assert all(tbl.index == expected_index['sort_false'][num])
             assert all(tbl.round(1).values ==
                        expected_values['normalize_true'][num])
-
-# ---------------------------------------------------------------------------- #
-#                        Tests for case_convert function                       #
-# ---------------------------------------------------------------------------- #
-
-
-class TestCaseConvert:
-    """
-    Tests for the case_convert helper function.
-    """
-
-    # --------------------- Tests that exceptions are raised --------------------- #
-
-    def test_case_convert_errors(self, test_data):
-        """
-        Tests that case_convert raises exceptions when 'df', 'cols' and 'to' are passed invalid inputs.
-        """
-
-        # Invalid input for 'df', which creates unique error messages due to polymorphism
-        with pytest.raises(AttributeError, match="no attribute 'columns'"):
-            dc.case_convert(df=pd.Series(('Upper', 'lower', 'case')))
-        with pytest.raises(AttributeError, match="no attribute 'columns'"):
-            dc.case_convert(df=['Upper', 'Word'])
-        with pytest.raises(AttributeError, match="no attribute 'copy'"):
-            dc.case_convert(df=('str', ))
-
-        # Range offset for 'cols'
-        with pytest.raises(TypeError, match="'cols' must be a sequence like a list or tuple or a single string"):
-            dc.case_convert(df=test_data, cols=range(0, 3))
-
-        # Invalid inputs for 'to'
-        # Numeric
-        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
-            dc.case_convert(df=test_data, cols='case_convert', to=3)
-        # Boolean
-        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
-            dc.case_convert(df=test_data, cols='case_convert', to=True)
-        # List
-        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
-            dc.case_convert(df=test_data, cols='case_convert',
-                            to=['lower', 'upper'])
-        # Single element tuple
-        with pytest.raises(ValueError, match="'to' must either by 'lower', 'upper', 'title', or 'capitalize'"):
-            dc.case_convert(
-                df=test_data, cols='case_convert', to=('lower', ))
-
-    # ------------------- Tests that custom exception is raised ------------------ #
-
-    def test_case_convert_custom_error(self, test_data):
-        """
-        Test that when user passes non 'string' columns in 'cols' the function raises InvalidColumnDtypeError.
-        """
-
-        with pytest.raises(InvalidColumnDtypeError, match=escape("Columns ['invalid_case_convert'] are invalid as dtype 'string' is expected")):
-            dc.case_convert(
-                test_data, ['invalid_case_convert', 'case_convert'])
-
-    # -------------------------- Tests for functionality ------------------------- #
-
-    @pytest.mark.parametrize(
-        "cols, to",
-        [
-            # No user supplied columns
-            (None, 'lower'),
-            (None, 'upper'),
-            (None, 'title'),
-            (None, 'capitalize'),
-            # User supplied columns
-            ('case_convert', 'lower'),
-            (('case_convert', 'str_encode'), 'upper'),
-            (['misspell', 'case_convert'], 'title'),
-            ('misspell', 'capitalize')
-        ],
-        scope='function'
-    )
-    def test_case_convert(self, test_data, cols, to):
-        """
-        Test that case_convert returns expected results given inputs with branches.
-        """
-
-        # Test branches
-        type(dc.case_convert(test_data, cols=cols, to=to)) == type(pd.DataFrame())
-
-        # Test two branches
-        branch1 = dc.case_convert(test_data, cols=None, to='lower')
-        branch2 = dc.case_convert(test_data, cols=(
-            'case_convert', 'str_encode'), to='upper')
-
-        # Branch 1
-        pd.testing.assert_frame_equal(
-            left=branch1,
-            right=pd.DataFrame({
-                'likert_encode': ('a', 'a', 'b', 'c', 'd', 'd', 'c', pd.NA, 'c', 'e'),
-                'str_encode': ('bachelor', 'highschool', pd.NA, 'grad', 'grad', pd.NA, 'highschool', 'college', 'college', 'bachelor'),
-                'onehot_encode': ('a',) * 5 + ('b',) * 5,
-                'case_convert': ('upper',) * 5 + ('lower',) * 3 + (pd.NA, pd.NA),
-                'misspell': ('republican',) * 4 + ('repulican',) + ('democrat',) * 3 + ('democract',) * 2,
-                'invalid_case_convert': tuple(range(0, 10))
-            })
-        )
-
-        # Branch 2
-        pd.testing.assert_frame_equal(
-            left=branch2,
-            right=pd.DataFrame({
-                'likert_encode': ('A', 'A', 'B', 'C', 'D', 'D', 'C', pd.NA, 'C', 'E'),
-                'str_encode': ('BACHELOR', 'HIGHSCHOOL', pd.NA, 'GRAD', 'GRAD', pd.NA, 'HIGHSCHOOL', 'COLLEGE', 'COLLEGE', 'BACHELOR'),
-                'onehot_encode': ('A',) * 5 + ('B',) * 5,
-                'case_convert': ('UPPER',) * 5 + ('LOWER',) * 3 + (pd.NA, pd.NA),
-                'misspell': ('republican',) * 4 + ('repulican',) + ('democrat',) * 3 + ('democract',) * 2,
-                'invalid_case_convert': tuple(range(0, 10))
-            })
-        )
-
-
-# ---------------------------------------------------------------------------- #
-#                      Tests for correct_misspell function                     #
-# ---------------------------------------------------------------------------- #
-
-
-class TestMisspell:
-    """
-    Tests for the correct_misspell helper function.
-    """
-
-    # ------------------------ Tests for exceptions raised ----------------------- #
-
-    def test_correct_misspell_errors(self, test_data):
-        """
-        Tests that correct_misspell raises exceptions when 'df', 'cols' and 'mapping' are passed invalid inputs.
-        """
-
-        # Invalid input for 'df', which creates unique error messages due to polymorphism, but usually AttributeError or KeyError
-        # First place that may raise an exception is the '.copy' method
-        # The second place is keyword when subsetting df[cols] or df[col]
-        with pytest.raises(AttributeError):
-            dc.correct_misspell((1, 2, 3), cols='misspell',
-                                mapping={'democract': 'democrat'})
-        with pytest.raises(KeyError):
-            dc.correct_misspell(pd.Series(
-                ['misspell', 'correct_spell']), cols='misspell', mapping={'democract': 'democrat'})
-
-        # Range offset for 'cols'
-        with pytest.raises(TypeError, match="'cols' must be a sequence like a list or tuple or a single string"):
-            dc.correct_misspell(df=test_data, cols=range(
-                0, 3), mapping={'democract': 'democrat'})
-        # Supplying unknown cols should return KeyErrors (handled by pandas)
-        with pytest.raises(KeyError):
-            dc.correct_misspell(df=test_data, cols='does_not_exist', mapping={
-                                'democract': 'democrat'})
-        with pytest.raises(KeyError):
-            dc.correct_misspell(df=test_data, cols=['misspell', 'does_not_exist2'], mapping={
-                                'democract': 'democrat'})
-
-        # Invalid inputs for 'mapping'
-        # Invalid types
-        with pytest.raises(TypeError, match="The argument 'mapping' must be a dictionary object"):
-            dc.correct_misspell(df=test_data, cols=[
-                                'misspell'], mapping=['str'])
-
-    # ------------------- Tests that custom exception is raised ------------------ #
-
-    def test_correct_misspell_custom_error(self, test_data):
-        """
-        Test that when user passes non 'string' columns in 'cols' the function raises InvalidColumnDtypeError.
-        """
-
-        with pytest.raises(InvalidColumnDtypeError, match=escape("Columns ['invalid_case_convert'] are invalid as dtype 'string' is expected")):
-            dc.correct_misspell(df=test_data, cols=[
-                                'misspell', 'invalid_case_convert'], mapping={'democract': 'democrat'})
-
-    # -------------------------- Tests for functionality ------------------------- #
-
-    @pytest.mark.parametrize(
-        "cols, mapping",
-        [
-            # Single str
-            ['misspell', {'repulican': 'republican',
-                          'democract': 'democrat'}],
-            # Sequence of str (tuple)
-            [('misspell', 'case_convert'), {'Upper': 'Changed'}]
-        ],
-        scope='function'
-    )
-    def test_correct_misspell(self, test_data, cols, mapping):
-        """
-        Test that correct_misspell returns expected results given inputs with branches.
-        """
-
-        # Test types
-        type(dc.correct_misspell(df=test_data, cols=cols,
-             mapping=mapping)) == type(pd.DataFrame())
-
-        # Single str branch
-        pd.testing.assert_frame_equal(
-            left=pd.DataFrame(
-                dc.correct_misspell(df=test_data, cols='misspell', mapping={
-                    'repulican': 'republican', 'democract': 'democrat'}).misspell
-            ),
-            right=pd.DataFrame(
-                {'misspell': ('republican',) * 5 + ('democrat',) * 5}
-            )
-        )
-
-        # Sequence of str (tuple) branch
-        # This triggers the extra casting branch--- tuple -> list
-        pd.testing.assert_frame_equal(
-            left=pd.DataFrame(
-                dc.correct_misspell(df=test_data, cols=('misspell', 'case_convert'), mapping={
-                                    'Upper': 'Changed'}).case_convert
-            ),
-            right=pd.DataFrame(
-                {'case_convert': ('Changed',) * 5 + ('lower',)
-                 * 3 + (pd.NA, pd.NA)}
-            )
-        )
-
-        # Sequence of str (list) branch
-        # No casting from tuple -> list
-        pd.testing.assert_frame_equal(
-            left=pd.DataFrame(
-                dc.correct_misspell(df=test_data, cols=['misspell', 'case_convert'], mapping={
-                                    'Upper': 'Changed'}).case_convert
-            ),
-            right=pd.DataFrame(
-                {'case_convert': ('Changed',) * 5 + ('lower',)
-                 * 3 + (pd.NA, pd.NA)}
-            )
-        )
 
 
 # ---------------------------------------------------------------------------- #
@@ -980,6 +1032,42 @@ class TestEncode:
                             name='int', dtype='Int64')
         )
 
+        # --------------------------- Case: modify in place -------------------------- #
+
+        # Copy data
+        copied_test_data = test_data.copy()
+
+        # Encoded columns using likert should have 'Int64' as dtypes
+        dc.encode(copied_test_data, mapping, inplace=True)
+        # No assignment needed
+        pd.testing.assert_frame_equal(
+            left=copied_test_data[[
+                'likert_encode', 'onehot_encode']],
+            right=pd.DataFrame({
+                'likert_encode': pd.array((1, 1, 2, 3, 4, 4, 3, pd.NA, 3, 5), dtype=pd.Int64Dtype()),
+                'onehot_encode': pd.array([1] * 5 + [2] * 5, dtype=pd.Int64Dtype())
+            })
+        )
+
+        # Rollup columns should have 'object' as dtypes
+        dc.encode(copied_test_data, mapping={
+            'col': 'str_encode',
+            'mapping': {
+                'bachelor': 'bach',
+                'college': 'less than bach',
+                'highschool': 'less than bach',
+                'grad': 'more than bach'
+            }
+        }, inplace=True)
+        # No assignment needed
+        pd.testing.assert_series_equal(
+            left=copied_test_data['str_encode'],
+            right=pd.Series(
+                ('bach', 'less than bach', np.NaN, 'more than bach', 'more than bach', np.NaN, 'less than bach', 'less than bach', 'less than bach', 'bach'), name='str_encode', dtype='object'
+            )
+        )
+
+
 # ---------------------------------------------------------------------------- #
 #                       Tests for onehot encode function                       #
 # ---------------------------------------------------------------------------- #
@@ -1005,7 +1093,7 @@ class TestOnehot:
                 pd.Series(('A', 'B', 'C'), name='col'), cols='col')
 
         # Invalid type for 'cols'
-        with pytest.raises(TypeError, match="'cols' must be a sequence like a list or tuple or a single string"):
+        with pytest.raises(TypeError, match="'cols' must be a sequence like a list or a single string"):
             dc.onehot_encode(test_data, cols=range(1, 3))
 
         # -------------------------- Not enforced exceptions ------------------------- #
@@ -1017,10 +1105,6 @@ class TestOnehot:
         # Attempts to select columns to encode using integer indices
         with pytest.raises(KeyError):
             dc.onehot_encode(test_data, cols=list(range(1, 3)))
-
-        # Attempts to select columns to encode using boolean indices
-        with pytest.raises(KeyError):
-            dc.onehot_encode(test_data, cols=(True, False))
 
         # -------------------------- Tests for functionality ------------------------- #
 

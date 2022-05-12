@@ -25,9 +25,7 @@ from pycitizen.exceptions import (ColumnDtypeInferError,
                                   InvalidColumnDtypeError,
                                   InvalidMappingKeys,
                                   InvalidMappingValues)
-from pycitizen.utils import (is_sequence,
-                             is_sequence_str,
-                             is_list_str,
+from pycitizen.utils import (is_list_str,
                              is_string,
                              is_encode_map)
 
@@ -105,80 +103,24 @@ def clean_col_nms(df: pd.DataFrame, inplace: Optional[bool] = False) -> Union[pd
         df = df.copy()
 
     original_col_nms = df.columns.tolist()
-    # Remove trailing and leading white spaces
-    new_col_nms = (col.strip() for col in original_col_nms)
-    # Replace white spaces with "_"
-    # \s+ matches 1 or more whitespace characters (spaces, tabs, line breaks)
-    new_col_nms = (sub(r'\s+', '_', col) for col in new_col_nms)
-    # [^a-zA-Z0-9_] matches any character that is not a 'word character' (alphanumeric & underscore), which is equivalent to \W
-    new_col_nms = (sub('[^a-zA-Z0-9_]', '', col.lower())
-                   for col in new_col_nms)
     # Remove leading characters until a letter is matched
     # ^ matches the beginning of the string
     # [^ ] is negated set, matching any character that is not in this set
     # + is a quantifier, matching the preceding element one or more times
-    new_col_nms = (sub('^[^a-zA-Z]+', '', col) for col in new_col_nms)
+    new_col_nms = (sub('^[^a-zA-Z]+', '', col) for col in original_col_nms)
     # Remove trailing characters until a letter is matched
-    new_col_nms = [sub('[^a-zA-Z]+$', '', col) for col in new_col_nms]
-    # Assign new columns
-    df.columns = new_col_nms
+    new_col_nms = (sub('[^a-zA-Z]+$', '', col) for col in new_col_nms)
+    # Replace white spaces in-between words with "_"
+    # \s+ matches 1 or more whitespace characters (spaces, tabs, line breaks)
+    new_col_nms = (sub(r'\s+', '_', col) for col in new_col_nms)
+    # [^a-zA-Z0-9_] matches any character that is not a 'word character' (alphanumeric & underscore), which is equivalent to \W
+    df.columns = [sub('[^a-zA-Z0-9_]', '', col.lower()) for col in new_col_nms]
 
     # Return copy
     if (not inplace):
         return df
     else:
         return None
-
-# -------------- Function to create a tuple of frequency tables -------------- #
-
-
-def freq_tbl(df: pd.DataFrame, dropna: Optional[bool] = False, cardinality: Optional[int] = 20, **kwargs: str) -> NamedTuple:
-    """
-    This function creates a sequence of freqency tables of the fields in a DataFrame,
-    which can be examined to identify misspellings and case inconsistencies. You may pass 
-    extra keyword arguments for the underlying pandas function. See `?pandas.DataFrame.value_counts`
-    for options (note that the `subset` argument is not permitted). 
-
-    Parameters
-    ----------
-    df : DataFrame
-    dropna : bool, optional
-        Whether to drop missing values, by default False.
-    cardinality : int, optional
-        Cardinality limit for the fields in the input DataFrame for filtering out high cardinal fields, by default 20.
-
-    Returns
-    -------
-    tuple of DataFrame
-        A namedtuple of frequency tables containing counts (or proportions if extra keyword arguments are specified) per category for each text field.
-
-    Raises
-    ------
-    ValueError
-        Only 'normalize', 'sort', 'ascending' are supported as extra keyword arguments.
-    TypeError
-        The argument 'cardinality' must be an integer.
-    """
-    # Check keyword args
-    if not all((kwarg in ('normalize', 'sort', 'ascending') for kwarg in kwargs.keys())):
-        raise ValueError(
-            "Only 'normalize', 'sort', and 'ascending' are supported as extra keyword arguments")
-    # Check input
-    if not isinstance(cardinality, int):
-        raise TypeError("'cardinality' must be an integer")
-    # Obtain number of unique values for each column in 'df'
-    # Only use columns where cardinality is relatively low (defaults to 25)
-    df = df.loc[:, [col for col in df.columns if len(
-        df[col].unique()) <= cardinality]]
-    # Generator of frequency tables
-    gen_of_freq = (pd.DataFrame(df[col].value_counts(dropna=dropna, **kwargs))
-                   for col in df.columns)
-    # Create subclass constructor
-    freq = namedtuple('freq', df.columns)
-    # Use constructor to create a named tuple
-    freq_tbl = freq._make(gen_of_freq)
-
-    return freq_tbl
 
 # ----------------------- Function for case conversion ----------------------- #
 
@@ -216,12 +158,9 @@ def case_convert(df: pd.DataFrame,
     ValueError
         Direction or type of case conversion must either be 'lower', 'upper', 'title', or 'capitalize'.
     """
-    if not is_sequence_str(cols) and cols is not None:
+    if not is_list_str(cols) and cols is not None:
         raise TypeError(
-            "'cols' must be a sequence like a list or tuple or a single string")
-    # Selecting by column names df[cols] cannot use tuples
-    if isinstance(cols, tuple):
-        cols = list(cols)
+            "'cols' must be a sequence like a list or a single string")
 
     # Create a copy if inplace=False
     if (not inplace):
@@ -309,12 +248,9 @@ def correct_misspell(df, cols, mapping, inplace=False) -> Union[pd.DataFrame, No
         df = df.copy()
 
     # Check input type
-    if not is_sequence_str(cols):
+    if not is_list_str(cols):
         raise TypeError(
-            "'cols' must be a sequence like a list or tuple or a single string")
-    # Cast to list object
-    if isinstance(cols, tuple):
-        cols = list(cols)
+            "'cols' must be a sequence like a list or a single string")
 
     # If cols is a single string, then use the string to select column from df directly
     if isinstance(cols, str):
@@ -336,43 +272,6 @@ def correct_misspell(df, cols, mapping, inplace=False) -> Union[pd.DataFrame, No
         return df
     else:
         return None
-
-# ------- Function for identifying columns that contain missing values ------- #
-
-
-def find_missing(df: pd.DataFrame, axis: Optional[int] = 0) -> pd.Series:
-    """
-    This is a helper function that identifies columns or rows in a DataFrame
-    that contain missing values.
-
-    Parameters
-    ----------
-    df : DataFrame
-    axis : int, optional
-        Whether to identify rows or columns that contain missing values, by default 0 (columns).
-
-    Returns
-    -------
-    Series of bool
-        Boolean series indicating columns or rows with missing values.
-
-    Raises
-    ------
-    TypeError
-        The argument 'axis' must be an integer.
-    ValueError
-        The argument 'axis' must either be 1 (rows) or 0 (columns).
-    """
-    if not isinstance(axis, int):
-        raise TypeError("The argument 'axis' must be an integer")
-
-    # The lambda function simply returns the true elements of the boolean series
-    if axis == 1:
-        return df.isna().any(axis=1)[lambda x: x]
-    elif axis == 0:
-        return df.isna().any(axis=0)[lambda x: x]
-    else:
-        raise ValueError("'axis' must either be 1 (rows) or 0 (columns)")
 
 # ---------------- Function to relocate columns in a DataFrame --------------- #
 
@@ -456,6 +355,102 @@ def relocate(df: pd.DataFrame,
     # For 'after', adding seg1 (with reference column) + seg2 (to_move) in this order ensures that columns to move will appear 'after' the reference column
     # Finally, seg3 adds the rest of the columns to the end
     return df[seg1 + seg2 + seg3]
+
+
+# ---------------------------------------------------------------------------- #
+#                               Profiling helpers                              #
+# ---------------------------------------------------------------------------- #
+
+# -------------- Function to create a tuple of frequency tables -------------- #
+
+
+def freq_tbl(df: pd.DataFrame, dropna: Optional[bool] = False, cardinality: Optional[int] = 20, **kwargs: str) -> NamedTuple:
+    """
+    This function creates a sequence of freqency tables of the fields in a DataFrame,
+    which can be examined to identify misspellings and case inconsistencies. You may pass 
+    extra keyword arguments for the underlying pandas function. See `?pandas.DataFrame.value_counts`
+    for options (note that the `subset` argument is not permitted). 
+
+    Parameters
+    ----------
+    df : DataFrame
+    dropna : bool, optional
+        Whether to drop missing values, by default False.
+    cardinality : int, optional
+        Cardinality limit for the fields in the input DataFrame for filtering out high cardinal fields, by default 20.
+
+    Returns
+    -------
+    tuple of DataFrame
+        A namedtuple of frequency tables containing counts (or proportions if extra keyword arguments are specified) per category for each text field.
+
+    Raises
+    ------
+    ValueError
+        Only 'normalize', 'sort', 'ascending' are supported as extra keyword arguments.
+    TypeError
+        The argument 'cardinality' must be an integer.
+    """
+    # Check keyword args
+    if not all((kwarg in ('normalize', 'sort', 'ascending') for kwarg in kwargs.keys())):
+        raise ValueError(
+            "Only 'normalize', 'sort', and 'ascending' are supported as extra keyword arguments")
+    # Check input
+    if not isinstance(cardinality, int):
+        raise TypeError("'cardinality' must be an integer")
+    # Obtain number of unique values for each column in 'df'
+    # Only use columns where cardinality is relatively low (defaults to 25)
+    df = df.loc[:, [col for col in df.columns if len(
+        df[col].unique()) <= cardinality]]
+    # Generator of frequency tables
+    gen_of_freq = (pd.DataFrame(df[col].value_counts(dropna=dropna, **kwargs))
+                   for col in df.columns)
+    # Create subclass constructor
+    freq = namedtuple('freq', df.columns)
+    # Use constructor to create a named tuple
+    freq_tbl = freq._make(gen_of_freq)
+
+    return freq_tbl
+
+
+# ------- Function for identifying columns that contain missing values ------- #
+
+
+def find_missing(df: pd.DataFrame, axis: Optional[int] = 0) -> pd.Series:
+    """
+    This is a helper function that identifies columns or rows in a DataFrame
+    that contain missing values. Then, rows and columns containing missing 
+    values may be retrieved using `df.loc[cu.find_missing(df, axis=1).index, :]` 
+    or `df.loc[:, cu.find_missing(df, axis=0).index]` respectively.
+
+    Parameters
+    ----------
+    df : DataFrame
+    axis : int, optional
+        Whether to identify rows or columns that contain missing values, by default 0 (columns).
+
+    Returns
+    -------
+    Series of bool
+        Boolean series indicating columns or rows with missing values.
+
+    Raises
+    ------
+    TypeError
+        The argument 'axis' must be an integer.
+    ValueError
+        The argument 'axis' must either be 1 (rows) or 0 (columns).
+    """
+    if not isinstance(axis, int):
+        raise TypeError("The argument 'axis' must be an integer")
+
+    # The lambda function simply returns the true elements of the boolean series
+    if axis == 1:
+        return df.isna().any(axis=1)[lambda x: x]
+    elif axis == 0:
+        return df.isna().any(axis=0)[lambda x: x]
+    else:
+        raise ValueError("'axis' must either be 1 (rows) or 0 (columns)")
 
 
 # ---------------------------------------------------------------------------- #
@@ -564,7 +559,7 @@ def encode(df: pd.DataFrame, mapping: List[dict], mapping_path: Optional[str] = 
 # ------------------------- One-hot or dummy encoding ------------------------ #
 
 
-def onehot_encode(df: pd.DataFrame, cols: Union[List[str], Tuple[str], str]) -> pd.DataFrame:
+def onehot_encode(df: pd.DataFrame, cols: Union[List[str], List[bool], str]) -> pd.DataFrame:
     """
     Use this function to onehot (or dummy) transform categorical 
     features, producing one feature per category, each as a binary 
@@ -577,7 +572,7 @@ def onehot_encode(df: pd.DataFrame, cols: Union[List[str], Tuple[str], str]) -> 
     Parameters
     ----------
     df : DataFrame
-    col : Sequence of str or str
+    col : Sequence of str or Sequence of boolean or str
         A single or sequence of column names to be transformed.
 
     Returns
@@ -596,9 +591,9 @@ def onehot_encode(df: pd.DataFrame, cols: Union[List[str], Tuple[str], str]) -> 
     if not (isinstance(df, pd.DataFrame)):
         raise TypeError("'df' must be be a DataFrame")
     # Check input
-    if not (is_sequence_str(cols)):
+    if not (is_list_str(cols)):
         raise TypeError(
-            "'cols' must be a sequence like a list or tuple or a single string")
+            "'cols' must be a sequence like a list or a single string")
 
     # Subset
     subset = df[cols]

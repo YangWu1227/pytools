@@ -1,7 +1,7 @@
 # pytools
 
 <!-- badges: start -->
-[![codecov](https://codecov.io/gh/YangWu1227/pytools/branch/master/graph/badge.svg?token=KS3DTV6WDT)](https://codecov.io/gh/YangWu1227/pytools)
+[![codecov](https://codecov.io/gh/YangWu1227/pytools/branch/master/graph/badge.svg?token=3FZYLMTIUS)](https://codecov.io/gh/YangWu1227/pytools)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- badges: end -->
 

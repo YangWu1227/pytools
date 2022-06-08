@@ -51,7 +51,8 @@ def _max_len_tbl(df: pd.DataFrame) -> pd.DataFrame:
     # Create a frame containing max string length for each object column
     max_len_frame = (pd.DataFrame(df_obj.select_dtypes(include=object)
                                   .replace(to_replace={np.NaN: None}, inplace=False)
-                                  .apply(lambda col: col.str.len().max()))
+                                  # Add 5 extra characters for padding
+                                  .apply(lambda col: col.str.len().max() + 5))
                      .reset_index()
                      .rename(columns={'index': 'col', 0: 'dtype'})
                      .astype({'dtype': int}, copy=False)

@@ -17,8 +17,8 @@ import os
 
 # ------------------------------- Intra-package ------------------------------ #
 
-import pycitizen.aws_utils as au
-from pycitizen.exceptions import ColumnDtypeInferError
+import pytools.aws_utils as au
+from pytools.exceptions import ColumnDtypeInferError
 
 # --------------------------------- Test data -------------------------------- #
 

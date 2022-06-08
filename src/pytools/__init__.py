@@ -1,3 +1,3 @@
 # Read version from installed package
 from importlib.metadata import version
-__version__ = version("pycitizen")
+__version__ = version("pytools")

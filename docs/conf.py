@@ -6,7 +6,7 @@
 
 # -- Project information -----------------------------------------------------
 
-project = u"pycitizen"
+project = u"pytools"
 copyright = u"2022, Yang Wu"
 author = u"Yang Wu"
 

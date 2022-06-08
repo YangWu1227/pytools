@@ -13,13 +13,13 @@ from re import escape
 
 # ------------------------------- Intra-package ------------------------------ #
 
-import pycitizen.data_cleaning as dc
-from pycitizen.exceptions import (ColumnNameKeyWordError,
-                                  ColumnNameStartWithDigitError,
-                                  InvalidIdentifierError,
-                                  InvalidColumnDtypeError,
-                                  InvalidMappingKeys,
-                                  InvalidMappingValues)
+import pytools.data_cleaning as dc
+from pytools.exceptions import (ColumnNameKeyWordError,
+                                ColumnNameStartWithDigitError,
+                                InvalidIdentifierError,
+                                InvalidColumnDtypeError,
+                                InvalidMappingKeys,
+                                InvalidMappingValues)
 
 
 # ---------------------------------------------------------------------------- #

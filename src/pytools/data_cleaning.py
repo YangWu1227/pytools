@@ -18,16 +18,16 @@ from typing import List, Dict, Tuple, Union, Optional, NamedTuple
 
 # ------------------------------- Intra-package ------------------------------ #
 
-from pycitizen.exceptions import (ColumnDtypeInferError,
-                                  ColumnNameKeyWordError,
-                                  ColumnNameStartWithDigitError,
-                                  InvalidIdentifierError,
-                                  InvalidColumnDtypeError,
-                                  InvalidMappingKeys,
-                                  InvalidMappingValues)
-from pycitizen.utils import (is_list_str,
-                             is_string,
-                             is_encode_map)
+from pytools.exceptions import (ColumnDtypeInferError,
+                                ColumnNameKeyWordError,
+                                ColumnNameStartWithDigitError,
+                                InvalidIdentifierError,
+                                InvalidColumnDtypeError,
+                                InvalidMappingKeys,
+                                InvalidMappingValues)
+from pytools.utils import (is_list_str,
+                           is_string,
+                           is_encode_map)
 
 # ---------------------------------------------------------------------------- #
 #                               Cleaning helpers                               #

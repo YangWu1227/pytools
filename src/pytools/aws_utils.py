@@ -18,8 +18,8 @@ from typing import List, Dict, Tuple, Union, Optional
 
 # ------------------------------- Intra-package ------------------------------ #
 
-from pycitizen.exceptions import ColumnDtypeInferError
-from pycitizen.utils import is_sequence
+from pytools.exceptions import ColumnDtypeInferError
+from pytools.utils import is_sequence
 
 # ---------------------------------------------------------------------------- #
 #                             SQL commands creation                            #

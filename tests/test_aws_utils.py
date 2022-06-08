@@ -199,16 +199,16 @@ class TestCreateStatement:
         """
         Check that the single create statement function returns expected output given fixture dtypes.
         """
-        assert au.create_statement(read_test_frame, 'test', 'key') == 'CREATE TABLE test (date DATE, date_with_na DATE, key VARCHAR(6) NOT NULL, varchar_long VARCHAR(36), varchar_missing VARCHAR(1), int8 INTEGER, int16_missing INTEGER, int32 INTEGER, int64 INTEGER, float16 REAL, float32 REAL, float64_missing REAL, mix_str_int_missing VARCHAR(2), PRIMARY KEY (key))'
+        assert au.create_statement(read_test_frame, 'test', 'key') == 'CREATE TABLE test (date DATE, date_with_na DATE, key VARCHAR(11) NOT NULL, varchar_long VARCHAR(41), varchar_missing VARCHAR(6), int8 INTEGER, int16_missing INTEGER, int32 INTEGER, int64 INTEGER, float16 REAL, float32 REAL, float64_missing REAL, mix_str_int_missing VARCHAR(7), PRIMARY KEY (key))'
 
     def test_create_statement_edge(self, df1, df2):
         """
         Check some edge cases--- int column with pd.NA and string column with numbers.
         """
         assert au.create_statement(
-            df1, 'test1', 'key') == 'CREATE TABLE test1 (col INTEGER, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))'
+            df1, 'test1', 'key') == 'CREATE TABLE test1 (col INTEGER, key VARCHAR(6) NOT NULL, PRIMARY KEY (key))'
         assert au.create_statement(
-            df2, 'test2', 'key') == 'CREATE TABLE test2 (col VARCHAR(5), key VARCHAR(1) NOT NULL, PRIMARY KEY (key))'
+            df2, 'test2', 'key') == 'CREATE TABLE test2 (col VARCHAR(10), key VARCHAR(6) NOT NULL, PRIMARY KEY (key))'
 
     # ---------------------------- Multiple statements --------------------------- #
 
@@ -224,14 +224,14 @@ class TestCreateStatement:
 
     def test_create_statementS_output(self, read_test_frame, df1, df2, df3):
         """
-        Check that the vectorized create statement function returns expected output given a set of fixure inputs.
+        Check that the vectorized create statement function returns expected output given a set of fixture inputs.
         """
         assert au.create_statements((read_test_frame, df1, df2, df3),
                                     ('test1', 'test2', 'test3', 'test4'), ('key', 'key', 'key', 'key')) == (
-                                        'CREATE TABLE test1 (date DATE, date_with_na DATE, key VARCHAR(6) NOT NULL, varchar_long VARCHAR(36), varchar_missing VARCHAR(1), int8 INTEGER, int16_missing INTEGER, int32 INTEGER, int64 INTEGER, float16 REAL, float32 REAL, float64_missing REAL, mix_str_int_missing VARCHAR(2), PRIMARY KEY (key))',
-                                        'CREATE TABLE test2 (col INTEGER, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))',
-                                        'CREATE TABLE test3 (col VARCHAR(5), key VARCHAR(1) NOT NULL, PRIMARY KEY (key))',
-                                        'CREATE TABLE test4 (col DATE, key VARCHAR(1) NOT NULL, PRIMARY KEY (key))'
+                                        'CREATE TABLE test1 (date DATE, date_with_na DATE, key VARCHAR(11) NOT NULL, varchar_long VARCHAR(41), varchar_missing VARCHAR(6), int8 INTEGER, int16_missing INTEGER, int32 INTEGER, int64 INTEGER, float16 REAL, float32 REAL, float64_missing REAL, mix_str_int_missing VARCHAR(7), PRIMARY KEY (key))',
+                                        'CREATE TABLE test2 (col INTEGER, key VARCHAR(6) NOT NULL, PRIMARY KEY (key))',
+                                        'CREATE TABLE test3 (col VARCHAR(10), key VARCHAR(6) NOT NULL, PRIMARY KEY (key))',
+                                        'CREATE TABLE test4 (col DATE, key VARCHAR(6) NOT NULL, PRIMARY KEY (key))'
         )
 
 
